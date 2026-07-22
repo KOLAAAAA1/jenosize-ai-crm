@@ -1,0 +1,242 @@
+// AI CRM MVP — data model (PLAN.md §3)
+// 8 tables. Idempotency + intent are enforced at the DB layer via unique
+// constraints and deliberate FK cascade choices, not just in app code.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Prisma 7: connection URLs live in prisma.config.ts (CLI/migrations) and are
+  // passed to PrismaClient via the pg driver adapter at runtime (see src/lib/db.ts).
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  SALES
+}
+
+enum Stage {
+  NEW
+  QUALIFIED
+  PROPOSAL
+  WON
+  LOST
+}
+
+enum Source {
+  WEBSITE
+  MANUAL
+  LINE_OA
+}
+
+enum ActivityType {
+  NOTE
+  CALL
+  EMAIL
+  STAGE_CHANGE
+  AI_SUGGESTION
+  LINE_IN
+  LINE_OUT
+}
+
+enum MessageChannel {
+  LINE
+}
+
+enum MessageDirection {
+  IN
+  OUT
+}
+
+enum MessageStatus {
+  RECEIVED
+  DRAFT
+  APPROVED
+  SENT
+  FAILED
+}
+
+enum SuggestionType {
+  SUMMARY
+  SCORE
+  NEXT_ACTION
+  LINE_DRAFT
+}
+
+enum SuggestionStatus {
+  SUGGESTED
+  ACCEPTED
+  REJECTED
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  DUPLICATE
+  INVALID
+  FAILED
+}
+
+// PII / marketing-consent state for a contact. Drives the AI copilot's opt-out
+// handling (SKILL Evaluation Case 3). UNKNOWN is the safe default: still require
+// human approval for every outbound reply.
+enum ConsentStatus {
+  UNKNOWN
+  OPTED_IN
+  OPTED_OUT
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  role         UserRole @default(SALES)
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  ownedLeads Lead[]     @relation("LeadOwner")
+  activities Activity[]
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  industry  String?
+  size      String?
+  website   String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  contacts Contact[]
+  leads    Lead[]
+}
+
+model Contact {
+  id         String  @id @default(cuid())
+  companyId  String
+  firstName  String
+  lastName   String
+  email      String?
+  phone      String?
+  title      String?
+  lineUserId String? @unique // LINE → CRM mapping key
+  consentStatus ConsentStatus @default(UNKNOWN)
+  // Per-contact greeting auto-reply toggle (sale/admin controls it on the contact
+  // page). Default false = OA never auto-replies to this customer. Separate from
+  // the AI copilot, which is unaffected. See src/lib/line/autoreply.ts.
+  autoReplyEnabled Boolean @default(false)
+  createdAt  DateTime @default(now())
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leads    Lead[]
+  messages Message[]
+
+  @@index([companyId])
+}
+
+model Lead {
+  id          String   @id @default(cuid())
+  title       String
+  companyId   String
+  contactId   String
+  ownerId     String
+  stage       Stage    @default(NEW)
+  source      Source   @default(MANUAL)
+  valueTHB    Int      @default(0)
+  score       Int? // 0–100 qualification score (nullable until scored)
+  scoreReason String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact     Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  owner       User           @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  activities  Activity[]
+  messages    Message[]
+  suggestions AiSuggestion[]
+
+  @@index([companyId])
+  @@index([contactId])
+  @@index([ownerId])
+  @@index([stage])
+  @@index([source])
+}
+
+// Immutable timeline. Rows are appended, never updated.
+model Activity {
+  id        String       @id @default(cuid())
+  leadId    String
+  userId    String? // nullable: system / AI / inbound-LINE entries have no user
+  type      ActivityType
+  body      String
+  metadata  Json?
+  createdAt DateTime     @default(now())
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Message {
+  id                String           @id @default(cuid())
+  leadId            String?
+  contactId         String
+  channel           MessageChannel   @default(LINE)
+  direction         MessageDirection
+  providerMessageId String?          @unique // idempotency for inbound LINE
+  status            MessageStatus
+  body              String
+  createdAt         DateTime         @default(now())
+
+  lead    Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([contactId])
+  @@index([status])
+}
+
+// AI output is a suggestion, never a confirmed write, until a human acts on it.
+model AiSuggestion {
+  id        String           @id @default(cuid())
+  leadId    String
+  type      SuggestionType
+  payload   Json
+  model     String
+  status    SuggestionStatus @default(SUGGESTED)
+  createdBy String // "ai:<model>" or "fallback:deterministic"
+  createdAt DateTime         @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([status])
+}
+
+// Dedupe + audit for inbound webhooks (idempotent re-delivery).
+model WebhookEvent {
+  id              String        @id @default(cuid())
+  provider        String        @default("LINE")
+  providerEventId String        @unique // dedupe key
+  signatureValid  Boolean
+  rawPayload      Json
+  status          WebhookStatus @default(RECEIVED)
+  processedAt     DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@index([status])
+}

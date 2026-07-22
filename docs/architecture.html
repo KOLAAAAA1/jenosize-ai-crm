@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI CRM MVP — System Architecture</title>
+    <style>
+      /* ---------- Token system ---------- */
+      :root {
+        --paper: #eef1f7;
+        --surface: #ffffff;
+        --surface-2: #f5f8fd;
+        --text: #17203a;
+        --muted: #566178;
+        --faint: #8290a6;
+        --border: #d9e0ec;
+        --border-strong: #c2cbdc;
+        --spine: #4457d6;
+        --spine-ink: #34429c;
+        --spine-soft: rgba(68, 87, 214, 0.09);
+        --spine-line: rgba(68, 87, 214, 0.45);
+
+        --dot-client: #6b7688;
+        --dot-line: #06a94a;
+        --dot-ai: #cf7a2e;
+        --dot-data: #0f9384;
+
+        --shadow: 0 1px 2px rgba(20, 30, 55, 0.05),
+          0 8px 24px rgba(20, 30, 55, 0.06);
+        --shadow-hover: 0 2px 4px rgba(20, 30, 55, 0.07),
+          0 14px 34px rgba(20, 30, 55, 0.11);
+
+        --fs-eyebrow: 0.72rem;
+        --fs-note: 0.8rem;
+        --fs-body: 0.9rem;
+        --fs-node: 1rem;
+        --fs-h2: 1.12rem;
+
+        --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Code',
+          Menlo, Consolas, monospace;
+        --sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+          sans-serif;
+
+        --radius: 12px;
+        --maxw: 1080px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #0b0f17;
+          --surface: #121927;
+          --surface-2: #0e141f;
+          --text: #e7ecf5;
+          --muted: #9aa6ba;
+          --faint: #6c7789;
+          --border: #263042;
+          --border-strong: #35415a;
+          --spine: #8aa0ff;
+          --spine-ink: #aab8ff;
+          --spine-soft: rgba(138, 160, 255, 0.12);
+          --spine-line: rgba(138, 160, 255, 0.42);
+
+          --dot-client: #8492a8;
+          --dot-line: #22c15f;
+          --dot-ai: #eb9a4f;
+          --dot-data: #23b6a4;
+
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.4),
+            0 10px 30px rgba(0, 0, 0, 0.45);
+          --shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.5),
+            0 18px 44px rgba(0, 0, 0, 0.6);
+        }
+      }
+
+      /* Explicit toggle overrides — must win in both directions */
+      :root[data-theme='light'] {
+        --paper: #eef1f7;
+        --surface: #ffffff;
+        --surface-2: #f5f8fd;
+        --text: #17203a;
+        --muted: #566178;
+        --faint: #8290a6;
+        --border: #d9e0ec;
+        --border-strong: #c2cbdc;
+        --spine: #4457d6;
+        --spine-ink: #34429c;
+        --spine-soft: rgba(68, 87, 214, 0.09);
+        --spine-line: rgba(68, 87, 214, 0.45);
+        --dot-client: #6b7688;
+        --dot-line: #06a94a;
+        --dot-ai: #cf7a2e;
+        --dot-data: #0f9384;
+        --shadow: 0 1px 2px rgba(20, 30, 55, 0.05),
+          0 8px 24px rgba(20, 30, 55, 0.06);
+        --shadow-hover: 0 2px 4px rgba(20, 30, 55, 0.07),
+          0 14px 34px rgba(20, 30, 55, 0.11);
+      }
+      :root[data-theme='dark'] {
+        --paper: #0b0f17;
+        --surface: #121927;
+        --surface-2: #0e141f;
+        --text: #e7ecf5;
+        --muted: #9aa6ba;
+        --faint: #6c7789;
+        --border: #263042;
+        --border-strong: #35415a;
+        --spine: #8aa0ff;
+        --spine-ink: #aab8ff;
+        --spine-soft: rgba(138, 160, 255, 0.12);
+        --spine-line: rgba(138, 160, 255, 0.42);
+        --dot-client: #8492a8;
+        --dot-line: #22c15f;
+        --dot-ai: #eb9a4f;
+        --dot-data: #23b6a4;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.45);
+        --shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.5),
+          0 18px 44px rgba(0, 0, 0, 0.6);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: var(--fs-body);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        background-image: radial-gradient(
+          circle at 1px 1px,
+          var(--border) 1px,
+          transparent 0
+        );
+        background-size: 26px 26px;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background-image: radial-gradient(
+            circle at 1px 1px,
+            rgba(255, 255, 255, 0.035) 1px,
+            transparent 0
+          );
+        }
+      }
+      :root[data-theme='dark'] body {
+        background-image: radial-gradient(
+          circle at 1px 1px,
+          rgba(255, 255, 255, 0.035) 1px,
+          transparent 0
+        );
+      }
+      :root[data-theme='light'] body {
+        background-image: radial-gradient(
+          circle at 1px 1px,
+          var(--border) 1px,
+          transparent 0
+        );
+      }
+
+      .wrap {
+        max-width: var(--maxw);
+        margin: 0 auto;
+        padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1rem, 3vw, 2rem) 4rem;
+      }
+
+      /* ---------- Header ---------- */
+      header.head {
+        position: relative;
+        margin-bottom: 2.25rem;
+      }
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: var(--fs-eyebrow);
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--spine);
+        margin: 0 0 0.7rem;
+        font-weight: 600;
+      }
+      h1 {
+        font-size: clamp(1.65rem, 4.4vw, 2.35rem);
+        line-height: 1.08;
+        letter-spacing: -0.022em;
+        font-weight: 800;
+        margin: 0 0 0.6rem;
+        text-wrap: balance;
+      }
+      .dek {
+        max-width: 60ch;
+        color: var(--muted);
+        margin: 0 0 1.25rem;
+        font-size: 0.98rem;
+      }
+      .metastrip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      .chip {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        color: var(--muted);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 0.26rem 0.62rem;
+        white-space: nowrap;
+      }
+
+      .theme-toggle {
+        position: absolute;
+        top: 0;
+        right: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        color: var(--muted);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 0.4rem 0.7rem;
+        cursor: pointer;
+        transition: border-color 0.15s ease, color 0.15s ease;
+      }
+      .theme-toggle:hover {
+        border-color: var(--border-strong);
+        color: var(--text);
+      }
+      .theme-toggle:focus-visible {
+        outline: 2px solid var(--spine);
+        outline-offset: 2px;
+      }
+
+      /* ---------- Legend ---------- */
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 1.15rem;
+        align-items: center;
+        padding: 0.8rem 1rem;
+        margin-bottom: 1.75rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+      }
+      .legend .lg {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-family: var(--mono);
+        font-size: 0.74rem;
+        color: var(--muted);
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .dot.client {
+        background: var(--dot-client);
+      }
+      .dot.line {
+        background: var(--dot-line);
+      }
+      .dot.ai {
+        background: var(--dot-ai);
+      }
+      .dot.data {
+        background: var(--dot-data);
+      }
+      .legend .sep {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      /* ---------- Board / tiers ---------- */
+      .board {
+        display: flex;
+        flex-direction: column;
+      }
+      .tier {
+        position: relative;
+      }
+      .tier-label {
+        font-family: var(--mono);
+        font-size: var(--fs-eyebrow);
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--faint);
+        font-weight: 600;
+        margin: 0 0 0.7rem;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .tier-label::after {
+        content: '';
+        height: 1px;
+        flex: 1;
+        background: var(--border);
+      }
+
+      .nodes {
+        display: grid;
+        gap: 1rem;
+      }
+      .nodes.two {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      /* ---------- Node card ---------- */
+      .node {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1rem 1.1rem;
+        box-shadow: var(--shadow);
+        transition: transform 0.16s ease, box-shadow 0.16s ease,
+          border-color 0.16s ease;
+      }
+      .node:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-hover);
+        border-color: var(--border-strong);
+      }
+      .node .node-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.15rem;
+      }
+      .node .title {
+        font-size: var(--fs-node);
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .node .ident {
+        font-family: var(--mono);
+        font-size: 0.76rem;
+        color: var(--muted);
+        margin: 0.1rem 0 0.55rem;
+      }
+      .node p {
+        margin: 0.35rem 0 0;
+        font-size: var(--fs-note);
+        color: var(--muted);
+      }
+      .node ul {
+        margin: 0.5rem 0 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.34rem;
+      }
+      .node li {
+        font-size: var(--fs-note);
+        color: var(--muted);
+        padding-left: 1.05rem;
+        position: relative;
+      }
+      .node li::before {
+        content: '›';
+        position: absolute;
+        left: 0;
+        top: -1px;
+        color: var(--spine);
+        font-weight: 700;
+      }
+      .node li code,
+      .node p code,
+      .node .ident code {
+        font-family: var(--mono);
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 0.86em;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 0.05rem 0.32rem;
+        color: var(--text);
+      }
+      .node.spine {
+        border-color: var(--spine-line);
+      }
+      .node.spine::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 12px;
+        bottom: 12px;
+        width: 3px;
+        border-radius: 3px;
+        background: var(--spine);
+        margin-left: -1px;
+      }
+      .node.spine {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .sub-apis {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.6rem;
+        margin-top: 0.85rem;
+      }
+      .api {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 0.7rem 0.75rem;
+      }
+      .api .an {
+        font-family: var(--mono);
+        font-size: 0.74rem;
+        color: var(--spine-ink);
+        font-weight: 600;
+      }
+      .api .ad {
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-top: 0.28rem;
+        line-height: 1.4;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.02em;
+        padding: 0.14rem 0.5rem;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        background: var(--surface-2);
+      }
+      .node-head .tag {
+        margin-left: auto;
+      }
+
+      /* ---------- Connectors ---------- */
+      .conn {
+        display: flex;
+        justify-content: center;
+        position: relative;
+        height: 46px;
+      }
+      .conn .line {
+        width: 2px;
+        height: 100%;
+        background: var(--spine-line);
+        position: relative;
+      }
+      .conn .line::after {
+        content: '';
+        position: absolute;
+        bottom: -1px;
+        left: 50%;
+        transform: translateX(-50%) rotate(45deg);
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid var(--spine);
+        border-bottom: 2px solid var(--spine);
+      }
+      .conn .clabel {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--paper);
+        padding: 0.1rem 0.55rem;
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        color: var(--muted);
+        white-space: nowrap;
+        border-radius: 6px;
+      }
+
+      /* ---------- Audit boundary band (the emphasis) ---------- */
+      .boundary {
+        position: relative;
+        background: var(--spine-soft);
+        border: 1.5px dashed var(--spine-line);
+        border-radius: var(--radius);
+        padding: 1.1rem 1.2rem;
+        margin: 0.2rem 0;
+      }
+      .boundary .b-tag {
+        position: absolute;
+        top: -0.7rem;
+        left: 1rem;
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: #fff;
+        background: var(--spine);
+        padding: 0.2rem 0.6rem;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+      .boundary .b-title {
+        font-weight: 700;
+        font-size: 0.98rem;
+        letter-spacing: -0.01em;
+        margin: 0.25rem 0 0.35rem;
+      }
+      .boundary p {
+        margin: 0;
+        font-size: var(--fs-note);
+        color: var(--muted);
+        max-width: 76ch;
+      }
+      .boundary .flowline {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        color: var(--spine-ink);
+        margin-top: 0.6rem;
+        font-weight: 600;
+      }
+
+      /* ---------- Backend split row ---------- */
+      .backend-grid {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 0.75rem;
+        align-items: stretch;
+      }
+      .hconn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-width: 88px;
+        position: relative;
+      }
+      .hconn .hline {
+        height: 2px;
+        width: 100%;
+        background: var(--spine-line);
+        position: relative;
+      }
+      .hconn .hline::after {
+        content: '';
+        position: absolute;
+        right: -1px;
+        top: 50%;
+        transform: translateY(-50%) rotate(-45deg);
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid var(--spine);
+        border-top: 2px solid var(--spine);
+      }
+      .hconn .hlabel {
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        color: var(--muted);
+        margin-bottom: 0.35rem;
+        text-align: center;
+      }
+
+      /* ---------- Key flows ---------- */
+      .flows {
+        margin-top: 3rem;
+      }
+      .flows h2 {
+        font-size: var(--fs-h2);
+        font-weight: 800;
+        letter-spacing: -0.015em;
+        margin: 0 0 0.35rem;
+      }
+      .flows .sub {
+        color: var(--muted);
+        font-size: var(--fs-note);
+        margin: 0 0 1.25rem;
+        max-width: 62ch;
+      }
+      .flow-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.9rem;
+      }
+      .flow {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1rem 1.1rem;
+        box-shadow: var(--shadow);
+      }
+      .flow .fh {
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+        margin-bottom: 0.55rem;
+      }
+      .flow .fn {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--spine);
+        border: 1px solid var(--spine-line);
+        border-radius: 6px;
+        padding: 0.05rem 0.45rem;
+        flex: none;
+      }
+      .flow .ft {
+        font-weight: 700;
+        font-size: 0.92rem;
+        letter-spacing: -0.01em;
+      }
+      .flow .steps {
+        font-family: var(--mono);
+        font-size: 0.76rem;
+        color: var(--muted);
+        line-height: 1.7;
+        word-break: break-word;
+      }
+      .flow .steps b {
+        color: var(--spine-ink);
+        font-weight: 700;
+      }
+      .arrow {
+        color: var(--faint);
+        padding: 0 0.15rem;
+      }
+
+      /* ---------- Footer ---------- */
+      footer.foot {
+        margin-top: 3rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        align-items: center;
+        font-family: var(--mono);
+        font-size: 0.74rem;
+        color: var(--faint);
+      }
+      footer.foot .tag {
+        color: var(--muted);
+      }
+
+      /* ---------- Responsive ---------- */
+      @media (max-width: 720px) {
+        .nodes.two {
+          grid-template-columns: 1fr;
+        }
+        .sub-apis {
+          grid-template-columns: 1fr;
+        }
+        .flow-grid {
+          grid-template-columns: 1fr;
+        }
+        .backend-grid {
+          grid-template-columns: 1fr;
+        }
+        .hconn {
+          min-width: 0;
+          height: 40px;
+          flex-direction: row;
+        }
+        .hconn .hline {
+          width: 2px;
+          height: 100%;
+        }
+        .hconn .hline::after {
+          right: 50%;
+          top: auto;
+          bottom: -1px;
+          transform: translateX(50%) rotate(-45deg);
+        }
+        .hconn .hlabel {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          margin: 0;
+          background: var(--paper);
+          padding: 0.1rem 0.4rem;
+          border-radius: 6px;
+        }
+        .theme-toggle {
+          position: static;
+          margin-bottom: 1rem;
+        }
+        header.head {
+          padding-top: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="head">
+        <button
+          class="theme-toggle"
+          id="themeBtn"
+          type="button"
+          aria-label="Toggle color theme"
+        >
+          <span id="themeIcon">◑</span><span id="themeLabel">Theme</span>
+        </button>
+        <p class="eyebrow">AI CRM MVP · System Architecture</p>
+        <h1>One Next.js app, one audit boundary</h1>
+        <p class="dek">
+          The vertical slice a salesperson touches — browser, API, database, the
+          <code>crm-copilot</code> AI skill, and LINE OA — drawn as one request
+          path. Everything the AI or LINE produces is a
+          <em>suggestion or a record</em> until a human approves it. That gate
+          is the audit trail.
+        </p>
+        <div class="metastrip">
+          <span class="chip">Next.js App Router</span>
+          <span class="chip">Prisma + PostgreSQL (Neon)</span>
+          <span class="chip">Claude · claude-haiku-4-5</span>
+          <span class="chip">LINE Messaging API</span>
+          <span class="chip">Deploy · Vercel</span>
+        </div>
+      </header>
+
+      <div class="legend" aria-label="Legend">
+        <span class="lg"><span class="dot client"></span> Client / actor</span>
+        <span class="lg"><span class="dot line"></span> LINE channel</span>
+        <span class="lg"><span class="dot ai"></span> AI / LLM</span>
+        <span class="lg"><span class="dot data"></span> Persistence</span>
+        <span class="sep"></span>
+        <span class="lg">↓ request &amp; data flow</span>
+      </div>
+
+      <div class="board">
+        <!-- TIER 1 — CLIENT -->
+        <section class="tier" aria-label="Client tier">
+          <h2 class="tier-label">Client</h2>
+          <div class="nodes two">
+            <div class="node">
+              <div class="node-head">
+                <span class="dot client"></span
+                ><span class="title">Salesperson</span
+                ><span class="tag">Browser · CRM UI</span>
+              </div>
+              <p class="ident">React Server Components · Tailwind</p>
+              <ul>
+                <li>Lead list — search &amp; filter by stage, owner, source</li>
+                <li>Lead detail — profile + unified timeline</li>
+                <li>
+                  Pipeline board, "Ask AI", Accept / Reject, Approve reply
+                </li>
+              </ul>
+            </div>
+            <div class="node">
+              <div class="node-head">
+                <span class="dot line"></span
+                ><span class="title">LINE Platform</span
+                ><span class="tag">LINE OA users</span>
+              </div>
+              <p class="ident">webhook · reply / push</p>
+              <ul>
+                <li>Inbound messages from customers on LINE</li>
+                <li>Delivers signed events to the webhook endpoint</li>
+                <li>Re-delivers on failure — must be idempotent</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <div class="conn">
+          <span class="line"></span
+          ><span class="clabel"
+            >HTTPS · fetch (Zod-typed) &nbsp;·&nbsp; POST webhook</span
+          >
+        </div>
+
+        <!-- TIER 2 — APPLICATION -->
+        <section class="tier" aria-label="Application tier">
+          <h2 class="tier-label">Application — Next.js on Vercel</h2>
+          <div class="nodes">
+            <div class="node spine">
+              <div class="node-head">
+                <span class="title">Route Handlers</span
+                ><span class="tag">runtime = nodejs</span>
+              </div>
+              <p class="ident">/app/api/*</p>
+              <p>
+                A single deploy target serving the CRM API, the AI copilot, and
+                the LINE webhook — every input Zod-validated, every error
+                handled.
+              </p>
+              <div class="sub-apis">
+                <div class="api">
+                  <div class="an">/api/crm/*</div>
+                  <div class="ad">
+                    CRUD for companies, contacts, leads. Stage move writes a
+                    <code>STAGE_CHANGE</code> activity.
+                  </div>
+                </div>
+                <div class="api">
+                  <div class="an">/api/ai/copilot</div>
+                  <div class="ad">
+                    Builds CRM context, calls the
+                    <code>crm-copilot</code> skill, returns structured JSON.
+                  </div>
+                </div>
+                <div class="api">
+                  <div class="an">/api/line/webhook</div>
+                  <div class="ad">
+                    Verify <code>X-Line-Signature</code> on raw body → dedupe on
+                    event id → map <code>lineUserId</code>.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="conn">
+          <span class="line"></span
+          ><span class="clabel">writes go through the gate ↓</span>
+        </div>
+
+        <!-- TIER 3 — AUDIT BOUNDARY -->
+        <section class="tier" aria-label="Trust boundary">
+          <div class="boundary">
+            <span class="b-tag">⛨ Suggestion → Commit boundary</span>
+            <div class="b-title">
+              AI output and inbound LINE events are records, never silent side
+              effects.
+            </div>
+            <p>
+              Nothing reaches the customer or becomes a confirmed CRM fact until
+              a human approves it. AI results land as
+              <code>AiSuggestion (SUGGESTED)</code>; inbound LINE lands as
+              <code>Message (RECEIVED)</code>. A person clicks Accept or Approve
+              — only then is a real <code>Activity</code> or an outbound
+              <code>Message</code> written.
+            </p>
+            <div class="flowline">
+              draft&nbsp;→&nbsp;human approve&nbsp;→&nbsp;committed
+              &nbsp;&nbsp;|&nbsp;&nbsp;
+              suggest&nbsp;→&nbsp;accept&nbsp;→&nbsp;activity
+            </div>
+          </div>
+        </section>
+
+        <div class="conn"><span class="line"></span></div>
+
+        <!-- TIER 4 — BACKEND -->
+        <section class="tier" aria-label="Backend tier">
+          <h2 class="tier-label">Backend services</h2>
+          <div class="backend-grid">
+            <div class="node">
+              <div class="node-head">
+                <span class="dot ai"></span
+                ><span class="title">crm-copilot skill</span
+                ><span class="tag">→ Claude API</span>
+              </div>
+              <p class="ident">skills/crm-copilot/SKILL.md</p>
+              <ul>
+                <li>Summary + qualification score with reasons</li>
+                <li>Next-best action + draft LINE reply (structured JSON)</li>
+                <li>
+                  <b>Fallback:</b> deterministic rule scorer + templated reply
+                  when Claude is down — labeled as fallback
+                </li>
+              </ul>
+            </div>
+            <div class="hconn" aria-hidden="true">
+              <span class="hlabel">AiSuggestion</span>
+              <span class="hline"></span>
+            </div>
+            <div class="node">
+              <div class="node-head">
+                <span class="dot data"></span
+                ><span class="title">Prisma → PostgreSQL</span
+                ><span class="tag">Neon serverless</span>
+              </div>
+              <p class="ident">8 tables · migrations · seed</p>
+              <ul>
+                <li>
+                  Persists activities, messages, suggestions, webhook events
+                </li>
+                <li>
+                  Idempotency in the schema: unique
+                  <code>providerEventId</code>, <code>providerMessageId</code>,
+                  <code>lineUserId</code>
+                </li>
+                <li>Survives restart / refresh — no in-memory state</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- KEY FLOWS -->
+      <section class="flows" aria-label="Key data flows">
+        <h2>Key data flows</h2>
+        <p class="sub">
+          Four request paths that exercise the boundary above. Each is a graded
+          flow in the assignment.
+        </p>
+        <div class="flow-grid">
+          <div class="flow">
+            <div class="fh">
+              <span class="fn">01</span
+              ><span class="ft">LINE inbound message</span>
+            </div>
+            <div class="steps">
+              LINE <span class="arrow">→</span> <b>/api/line/webhook</b>
+              <span class="arrow">→</span> verify sig
+              <span class="arrow">→</span> dedupe
+              <span class="arrow">→</span> persist <code>Message</code> +
+              <code>WebhookEvent</code> <span class="arrow">→</span> map to lead
+              <span class="arrow">→</span> appears on timeline
+            </div>
+          </div>
+
+          <div class="flow">
+            <div class="fh">
+              <span class="fn">02</span><span class="ft">Ask AI on a lead</span>
+            </div>
+            <div class="steps">
+              UI <span class="arrow">→</span> <b>/api/ai/copilot</b>
+              <span class="arrow">→</span> build context
+              <span class="arrow">→</span> Claude (or fallback)
+              <span class="arrow">→</span> <code>AiSuggestion</code>
+              <b>SUGGESTED</b> <span class="arrow">→</span> shown
+              <span class="arrow">→</span> <b>Accept</b> writes
+              <code>Activity</code>
+            </div>
+          </div>
+
+          <div class="flow">
+            <div class="fh">
+              <span class="fn">03</span
+              ><span class="ft">Approve &amp; send LINE reply</span>
+            </div>
+            <div class="steps">
+              draft reply <span class="arrow">→</span> human <b>Approve</b>
+              <span class="arrow">→</span> LINE send (mock adapter when
+              disabled) <span class="arrow">→</span> <code>Message</code>
+              <b>SENT</b> <span class="arrow">→</span> retry-safe on failure
+            </div>
+          </div>
+
+          <div class="flow">
+            <div class="fh">
+              <span class="fn">04</span
+              ><span class="ft">Move a lead stage</span>
+            </div>
+            <div class="steps">
+              board drag <span class="arrow">→</span> <b>/api/crm/leads/:id</b>
+              <span class="arrow">→</span> update <code>stage</code>
+              <span class="arrow">→</span> write
+              <code>STAGE_CHANGE</code> activity
+              <span class="arrow">→</span> timeline updates after hard refresh
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="foot">
+        <span class="tag">Part 3 deliverable</span>
+        <span>Architecture &amp; data-flow diagram · AI CRM MVP</span>
+        <span class="sep" style="flex: 1"></span>
+        <span>synthetic data only · no secrets committed</span>
+      </footer>
+    </div>
+
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var btn = document.getElementById('themeBtn');
+        var label = document.getElementById('themeLabel');
+        function current() {
+          var attr = root.getAttribute('data-theme');
+          if (attr) return attr;
+          return window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        }
+        function apply(t) {
+          root.setAttribute('data-theme', t);
+          label.textContent = t === 'light' ? 'Light' : 'Dark';
+        }
+        apply(current());
+        btn.addEventListener('click', function () {
+          apply(current() === 'dark' ? 'light' : 'dark');
+        });
+      })();
+    </script>
+  </body>
+</html>

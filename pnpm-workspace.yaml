@@ -1,0 +1,8 @@
+# pnpm settings (pnpm 11+ reads project config from here, not package.json).
+# Allow these packages to run their native post-install build scripts.
+allowBuilds:
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  sharp: true
+  unrs-resolver: true

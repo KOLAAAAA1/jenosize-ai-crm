@@ -1,0 +1,216 @@
+{
+  "info": {
+    "_postman_id": "b7c1e2a4-6d3f-4a91-9f0c-1a2b3c4d5e6f",
+    "name": "Jenosize AI CRM",
+    "description": "API collection for the Jenosize AI CRM MVP.\n\n## Base URL\nAll requests use `{{baseUrl}}`. Switch between local and tunnel by selecting an environment (top-right in Postman):\n- **Jenosize CRM — Local** → http://localhost:3000\n- **Jenosize CRM — Tunnel** → your current `*.trycloudflare.com` URL (paste it in after each `pnpm tunnel` run)\n\nIf no environment is selected, the collection falls back to http://localhost:3000.\n\n## Auth\nCall **Auth / Login** first. It sets the HttpOnly `crm_session` cookie, which Postman's cookie jar stores per-domain and sends automatically on every later request to the same base URL. Log in once per base URL (localhost and the tunnel are different domains, so each needs its own login).\n\n## LINE webhook signature\nThe LINE webhook verifies an HMAC-SHA256 (`X-Line-Signature`). Set the `lineChannelSecret` collection variable to your channel secret (`LINE_CHANNEL_SECRET` in .env). The signed requests compute the header automatically in a pre-request script from the exact request body.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.code === 200);",
+                  "pm.test('returns user', () => pm.expect(pm.response.json()).to.have.property('user'));",
+                  "// crm_session cookie is stored automatically in Postman's cookie jar."
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Authenticate a seeded user. Sets the HttpOnly `crm_session` cookie. Seeded logins: admin@jenosize.demo / manager@jenosize.demo / sales@jenosize.demo — password is DEMO_PASSWORD from prisma/seed.ts."
+          }
+        },
+        {
+          "name": "Me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 when authenticated (401 if not logged in)', () => pm.expect([200, 401]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me"]
+            },
+            "description": "Returns the current session user, or 401 if not authenticated. Uses the cookie set by Login."
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI Copilot",
+      "item": [
+        {
+          "name": "Generate suggestion",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.code === 200);",
+                  "const b = pm.response.json();",
+                  "pm.test('returns a suggestion', () => pm.expect(b).to.have.property('suggestion'));",
+                  "pm.test('source is ai or fallback', () => pm.expect(['ai', 'fallback']).to.include(b.suggestion.source));",
+                  "console.log('source:', b.suggestion.source, '| model:', b.suggestion.model, '| score:', b.suggestion.qualification && b.suggestion.qualification.score);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"{{leadId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/copilot",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "ai", "copilot"]
+            },
+            "description": "Runs the copilot for one lead and persists an AiSuggestion(SUGGESTED). Requires an authenticated session (call Login first). Returns `source: \"ai\"` when the model is reachable, or `source: \"fallback\"` (deterministic) when it is unavailable / no API key / out of credits."
+          }
+        }
+      ]
+    },
+    {
+      "name": "LINE Webhook",
+      "item": [
+        {
+          "name": "Inbound message (valid signature)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Sign the exact request body with HMAC-SHA256 (base64), like LINE does.",
+                  "// Use a local alias (not the deprecated global CryptoJS) so it works in both the Postman app and newman.",
+                  "const cryptoJs = require('crypto-js');",
+                  "const secret = pm.variables.get('lineChannelSecret');",
+                  "if (!secret) { console.warn('Set the lineChannelSecret collection variable to your LINE_CHANNEL_SECRET.'); }",
+                  "const raw = pm.variables.replaceIn(pm.request.body.raw);",
+                  "const sig = cryptoJs.HmacSHA256(raw, secret || '').toString(cryptoJs.enc.Base64);",
+                  "pm.request.headers.upsert({ key: 'x-line-signature', value: sig });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.code === 200);",
+                  "const b = pm.response.json();",
+                  "pm.test('processed or duplicate', () => pm.expect(['processed', 'duplicate']).to.include(b.status));",
+                  "console.log('status:', b.status, '| processed:', b.processed, '| duplicates:', b.duplicates, '| unmapped:', b.unmapped);",
+                  "// Tip: send once → processed; send again (same lineWebhookEventId) → duplicate (idempotent).",
+                  "// Change lineWebhookEventId + lineMessageId to process a fresh event."
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination\": \"Ubotdestination\",\n  \"events\": [\n    {\n      \"type\": \"message\",\n      \"webhookEventId\": \"{{lineWebhookEventId}}\",\n      \"mode\": \"active\",\n      \"timestamp\": 1784500000000,\n      \"deliveryContext\": { \"isRedelivery\": false },\n      \"source\": { \"type\": \"user\", \"userId\": \"{{lineUserId}}\" },\n      \"replyToken\": \"pm-reply-token\",\n      \"message\": { \"type\": \"text\", \"id\": \"{{lineMessageId}}\", \"text\": \"{{lineMessageText}}\" }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/line/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "line", "webhook"]
+            },
+            "description": "Simulates an inbound LINE text message with a valid signature. The pre-request script computes `x-line-signature` from `lineChannelSecret` over the exact body.\n\n- First send → `processed: 1` (persists a Message(RECEIVED) + LINE_IN activity, if `lineUserId` maps to a Contact).\n- Re-send unchanged → `duplicate: 1` (idempotent on webhookEventId).\n- If `lineUserId` is not linked to any Contact → `unmapped: 1` (stored as a signed FAILED audit row).\n\n`lineUserId` defaults to a seeded LINE contact. Change `lineWebhookEventId` + `lineMessageId` to process a new event."
+          }
+        },
+        {
+          "name": "Inbound message (invalid signature → 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 blocked', () => pm.response.code === 401);",
+                  "pm.test('status blocked', () => pm.expect(pm.response.json().status).to.eql('blocked'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-line-signature", "value": "deadbeef-not-a-valid-signature" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination\": \"Ubotdestination\",\n  \"events\": [\n    {\n      \"type\": \"message\",\n      \"webhookEventId\": \"pm_invalid_evt\",\n      \"source\": { \"type\": \"user\", \"userId\": \"{{lineUserId}}\" },\n      \"message\": { \"type\": \"text\", \"id\": \"pm_invalid_msg\", \"text\": \"This must not be processed.\" }\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/line/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "line", "webhook"]
+            },
+            "description": "Sends a deliberately bad `x-line-signature`. Expected: 401 `blocked`; the body is NOT parsed or stored as a message — only safe audit metadata (body hash + signature-present flag) is recorded."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/logout",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "logout"]
+        },
+        "description": "Clears the `crm_session` cookie. Placed last so a full 'Run collection' logs out only after the other requests have used the session."
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" },
+    { "key": "adminEmail", "value": "admin@jenosize.demo", "type": "string" },
+    { "key": "password", "value": "Demo1234!", "type": "string" },
+    { "key": "leadId", "value": "led_00249", "type": "string" },
+    { "key": "lineUserId", "value": "Ucfc1aef0dc311aacc408deee9b5225ed", "type": "string" },
+    { "key": "lineChannelSecret", "value": "", "type": "string" },
+    { "key": "lineWebhookEventId", "value": "pm_evt_demo", "type": "string" },
+    { "key": "lineMessageId", "value": "pm_msg_demo", "type": "string" },
+    { "key": "lineMessageText", "value": "Please send the proposal by Friday.", "type": "string" }
+  ]
+}

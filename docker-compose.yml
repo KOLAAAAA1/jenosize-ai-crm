@@ -1,0 +1,26 @@
+# Local Postgres for development. Mirrors Neon (Postgres 17) so the same
+# Prisma schema, migrations, and seed run identically locally and in the cloud.
+#   corepack pnpm db:up     # start
+#   corepack pnpm db:down   # stop (keeps data)
+#   corepack pnpm db:reset  # wipe volume + re-migrate + re-seed
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: crm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm
+      POSTGRES_DB: crm
+    ports:
+      - "5432:5432"
+    volumes:
+      - crm-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  crm-pgdata:
