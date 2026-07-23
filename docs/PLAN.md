@@ -95,7 +95,7 @@ WebhookEvent    id, provider, providerEventId(unique), signatureValid(bool),
 - [x] **Pipeline board**: native drag/drop board plus lead-detail stage mover; both reuse the atomic stage-move service and write `STAGE_CHANGE` Activity.
 - [x] **Lead detail page**: profile + unified **timeline** (activities + messages, chronological). *(Block 3)*
 - [x] CRUD, all inputs Zod-validated: companies/contacts create/edit done; lead stage changes validated through shared service.
-- [ ] **Deployed** to Vercel; **persistence verified across restart/refresh** (no in-memory state).
+- [x] **Deployed** to Vercel + Neon; **persistence verified across restart/refresh** (no in-memory state) — live at https://jenosize-ai-crm.vercel.app, smoke test 11/11.
 - **DoD:** a stranger can log in at the demo URL, find a lead, move its stage, and see the timeline update — after a hard refresh.
 
 ### Part 2 — AI Skill + LINE OA (30%) · *Growth/Agile + Entrepreneurial*
@@ -111,7 +111,7 @@ WebhookEvent    id, provider, providerEventId(unique), signatureValid(bool),
 - [~] **README**: architecture, DB config, setup/run/test, demo creds, API notes, LINE setup, and monitoring notes done. Deploy URL + LINE QR still pending.
 - [x] **Architecture + data-flow diagram** (Mermaid in README + standalone `docs/architecture.html`).
 - [~] API notes, `.env.example`, key trade-offs, known limitations, production next steps — API notes + `.env.example` + scaling notes + LINE event mapping/backfill helpers + predeploy check + deploy/submission audit scripts + submission checklist done; deployed URLs/QR still pending.
-- [x] **3 automated tests** (Vitest): **(1) core CRM flow — create lead→move stage→activity logged**, **(2) AI skill fallback**, and **(3) LINE webhook invalid-signature + replay idempotency** are done. Added outbound draft approval and greeting auto-reply coverage too. Latest full run: `75 passed` (11 files, typecheck clean).
+- [x] **3 automated tests** (Vitest): **(1) core CRM flow — create lead→move stage→activity logged**, **(2) AI skill fallback**, and **(3) LINE webhook invalid-signature + replay idempotency** are done. Added outbound draft approval, greeting auto-reply, and LIFF register/verify coverage too. Latest full run: `82 passed` (12 files, typecheck clean).
 - [x] Structured logging + monitoring notes: JSON app logger + MVP audit rows + failure Activities done; README monitoring notes done.
 - [x] **AI-usage log**: sample prompts/tasks, what you reviewed/rejected, **one meaningful change after human inspection** documented in `docs/AI_USAGE_LOG.md`.
 - [~] Submission: repo + deployed URL + demo creds + LINE QR + **3–5 min walkthrough video** — walkthrough script/checklist done; actual URL/QR/video pending.
@@ -135,7 +135,7 @@ Status: ✅ done · ◐ partial · ▫ pending
 | 7 | ✅ | 1.0 | `AiSuggestion` flow **done**: `/api/ai/copilot` persists SUGGESTED → CopilotPanel (Generate + Accept/Reject); LINE draft suggestions save `Message(DRAFT)` only after explicit click | P2 |
 | 8 | ✅ | 2.0 | LINE webhook done: raw-body signature verify, invalid-signature audit, event/message idempotency, contact/lead mapping, inbound `Message(RECEIVED)` + `LINE_IN` Activity; route-level tests pass | P2 |
 | 9 | ◐ | 1.0 | Outbound approval flow done locally: AI draft → `Message(DRAFT)` → human approve/send → mock or real LINE push adapter with `X-Line-Retry-Key`. **Inbound now proven with a real device** via Cloudflare tunnel (signature-valid webhook → Contact/Lead mapping → `LINE_IN` Activity). Real outbound phone send unblocked locally (`LINE_ENABLED=true`, tunnel HTTPS, live creds) — evidence capture pending | P2 |
-| 10 | ✅ | 1.0 | Vitest set up; required tests done (CRM flow, AI fallback, LINE security/idempotency) plus outbound approval, unmapped-webhook backfill, and greeting auto-reply coverage. Latest full run: **11 files / 75 tests passed** | P3 |
+| 10 | ✅ | 1.0 | Vitest set up; required tests done (CRM flow, AI fallback, LINE security/idempotency) plus outbound approval, unmapped-webhook backfill, greeting auto-reply, and LIFF register/verify coverage. Latest full run: **12 files / 82 tests passed** | P3 |
 | 11 | ◐ | 1.0 | Architecture diagram + `.env.example` + DB-config + README setup/API/LINE/monitoring notes + AI-usage log + LINE mapping/backfill helpers + predeploy check + deploy/submission audit scripts + submission checklist + walkthrough script **done**; **deployed URL live** (https://jenosize-ai-crm.vercel.app · demo `admin@jenosize.demo` / `Demo1234!`); LINE QR + 3–5 min walkthrough video pending | P3 |
 | — | — | — | *(Video recorded after, outside the 16h coding budget)* | P3 |
 
@@ -386,7 +386,7 @@ Full picture of what a sales CRM offers, scored against this MVP — so the defe
 - ➕ **Tasks & follow-up reminders** (committed — §11.2) · ➕ Calendar + email 2-way sync
 
 **Communication / Omnichannel**
-- ✅ LINE OA inbound capture + approval-based outbound
+- ✅ LINE OA inbound capture + approval-based outbound · ✅ chat-history view (§11.6) · ✅ per-contact greeting auto-reply (§11.5) · ✅ LIFF self-registration (§11.4)
 - ➕ Email integration (send/receive/tracking) · ➕ Templates · ➕ Sequences/cadences · ➕ Click-to-call/VoIP · ➕ SMS · ➕ Shared inbox
 
 **AI / Automation**
@@ -426,7 +426,11 @@ Ranked by rep/manager value ÷ build cost. P0 = must-haves from §11.1 (start he
 
 ---
 
-## 11.4 LIFF Self-Registration — Implementation Plan (customer onboarding)
+## 11.4 LIFF Self-Registration — ✅ Shipped (registration flow)
+
+> **Shipped:** public `/liff` create/init form (name required · phone/email · PDPA consent) → `POST /api/line/liff-register` with **server-side ID-token verification** (`liff-verify.ts`, channel id from `LINE_LIFF_ID` prefix or `LINE_LOGIN_CHANNEL_ID`) → **upsert Contact on `lineUserId`** under the sentinel *"LINE Self-Registered"* company (`liff-register.ts`; re-submit updates the same record). Plus a **desktop landing** (`liff-desktop-landing.tsx`) with QR + open-in-LINE for PC/external browsers (branch on `liff.isInClient()`). Deployed + live-verified (forged token → 401). Tests: `liff-register.test.ts`. **Still pending from the plan below:** the `follow`/`unfollow` webhook handling (step 4) — not built yet. Console setup required for live use: LIFF endpoint URL → `/liff`, enable `openid`+`profile` scopes.
+
+The plan below is kept as the design record.
 
 Closes the linking gap documented in §8/§9: today `Contact.lineUserId` can only be set by an operator hand-typing an opaque `U…` id they realistically only learn *after* an `unmapped` message. LIFF lets a customer self-register the moment they add the OA — Contact created and linked in one tap, so every later message maps cleanly. Estimated **~2–3 h** (extra vs. Tasks is the client SDK + server-side token verification).
 
@@ -478,3 +482,17 @@ A narrow, opt-in exception to the receive-only design: the OA sends a canned gre
 **Deliberately narrow (not built):** writes no `LINE_OUT` Activity, skips the `OPTED_OUT` consent check (defensible for a user-initiated greeting to an opted-in contact), and replies only to greetings — not a general auto-responder. A per-contact free-text auto-reply or keyword rules would be a later increment.
 
 **Design note:** keeping the switch **per-customer and default-off** preserves the customer-facing, human-approval principle (§9) — auto-reply is an explicit exception a human opts into, not a channel-wide behavior.
+
+---
+
+## 11.6 LINE Chat History (handover evidence) — ✅ Shipped
+
+A read-only **chat-thread view** of the LINE conversation on the lead detail page — so a rep taking over a lead can read the full buy/sell conversation as evidence, surviving any change of sales owner.
+
+**Why it was low-cost:** the persistence already existed — the webhook stores each inbound message as an immutable `Message` row keyed to `leadId`/`contactId` (with `providerMessageId` + timestamp), and outbound approved replies are stored the same way. This feature only adds a **new rendering** of those existing rows; no schema change.
+
+**What shipped**
+- `chat-history.tsx` — renders LINE messages chronologically as bubbles (customer left / sales right, LINE-green), with status pills (DRAFT/FAILED) and timestamps; a **"หลักฐานการสนทนา · อ้างอิงได้เมื่อเปลี่ยนผู้ดูแล"** header frames it as handover evidence. Rendered above the existing (audit) Timeline on `/leads/[id]`.
+- `scripts/seed-demo-chat.ts` — seeds a coherent Thai buy/sell conversation onto a demo lead (`led_00113`) so the panel demonstrates realistically; run on local + prod. Deployed + live-verified.
+
+**Known limitation (honest):** outbound bubbles are labeled with the lead's **current owner**, not the actual sender at send-time — `Message` has no per-message `senderUserId` (only `Activity` records a `userId`). Conversation *content* is fully preserved for handover; preserving the true sender label across an owner change would need a small `Message.senderUserId` schema addition — deferred as not worth it for the MVP.

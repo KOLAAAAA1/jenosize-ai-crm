@@ -44,7 +44,7 @@ Current local result:
 
 - `pnpm exec tsc --noEmit`: passed
 - `pnpm exec eslint`: passed
-- `pnpm test`: 11 files / 75 tests passed
+- `pnpm test`: 12 files / 82 tests passed
 - `pnpm build`: passed (Vercel production build completed in 47s)
 - `pnpm predeploy:check`: passes against `.env.production` (Neon pooled/direct URLs, https remote `APP_URL`). Still fails against local `.env` by design (local Docker URLs, local HTTP `APP_URL`).
 - `pnpm submission:audit`: checks required evidence files, package scripts, known test-count docs, secret-looking tracked values, and current deploy-env readiness. Local mode passes with a deploy-env warning; `SUBMISSION_REQUIRE_EXTERNAL=true pnpm submission:audit` correctly fails until remote `APP_URL` and DB env are set.
@@ -140,7 +140,7 @@ pnpm smoke:deploy
 
 ## Submission Package
 
-- [ ] Source repo URL — *no git remote yet; push to GitHub and paste the URL*
+- [x] Source repo URL — **https://github.com/KOLAAAAA1/jenosize-ai-crm** *(private — make public or invite reviewers before submitting)*
 - [x] Deployed Vercel URL — **https://jenosize-ai-crm.vercel.app**
 - [x] Demo credentials — **`admin@jenosize.demo` / `Demo1234!`**
 - [ ] LINE OA QR code or test instructions — *from LINE Developers console (Bot basic ID `@488yhaah`); repoint webhook to the Vercel URL first*

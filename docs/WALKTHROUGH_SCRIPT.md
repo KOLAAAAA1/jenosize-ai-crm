@@ -47,7 +47,7 @@ Talking point: approvals use LINE push messages with `X-Line-Retry-Key`, because
 
 Show:
 
-- `pnpm test` result: 10 files / 63 tests
+- `pnpm test` result: 12 files / 82 tests
 - `docs/AI_USAGE_LOG.md`
 - `docs/SUBMISSION_CHECKLIST.md`
 - `README.md` setup/deploy/monitoring notes

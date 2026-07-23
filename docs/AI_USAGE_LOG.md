@@ -42,5 +42,5 @@ Observed results:
 
 - TypeScript: passed
 - ESLint: passed
-- Vitest: 10 files / 63 tests passed
+- Vitest: 12 files / 82 tests passed
 - Next production build: passed after allowing network access for `next/font` Google Fonts

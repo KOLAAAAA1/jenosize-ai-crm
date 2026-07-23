@@ -67,3 +67,15 @@ export const contactSchema = z.object({
   // own toggle (setContactAutoReply), so the main form save must never touch it.
 });
 export type ContactInput = z.infer<typeof contactSchema>;
+
+// Customer-facing LIFF self-registration. `idToken` is verified server-side; the
+// LINE userId is taken from the verified token, never from the client.
+export const liffRegisterSchema = z.object({
+  idToken: z.string().trim().min(1, "Missing LINE identity token"),
+  firstName: z.string().trim().min(1, "First name is required").max(100),
+  lastName: z.string().trim().min(1, "Last name is required").max(100),
+  email: optionalEmail,
+  phone: optionalText,
+  consent: z.boolean().default(false),
+});
+export type LiffRegisterFormInput = z.infer<typeof liffRegisterSchema>;

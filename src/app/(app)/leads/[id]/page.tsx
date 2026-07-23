@@ -6,6 +6,7 @@ import { formatDateTime, formatTHB, timeAgo } from "@/lib/format";
 import { StageMover } from "./stage-mover";
 import { CopilotPanel, type PendingSuggestion } from "./copilot-panel";
 import { LineDraftsPanel, type PendingLineDraft } from "./line-drafts-panel";
+import { ChatHistory, type ChatMessage } from "./chat-history";
 import { copilotResultSchema, type CopilotSuggestion } from "@/lib/ai/schema";
 
 type TimelineItem =
@@ -40,6 +41,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const pendingLineDrafts: PendingLineDraft[] = lead.messages
     .filter((m) => m.direction === "OUT" && (m.status === "DRAFT" || m.status === "FAILED"))
     .map((m) => ({ id: m.id, body: m.body, status: m.status as "DRAFT" | "FAILED" }));
+
+  // LINE conversation as a chat thread (oldest → newest) — handover evidence.
+  const chatMessages: ChatMessage[] = lead.messages
+    .filter((m) => m.channel === "LINE")
+    .map((m) => ({ id: m.id, direction: m.direction, status: m.status, body: m.body, at: m.createdAt }))
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
 
   const timeline: TimelineItem[] = [
     ...lead.activities.map((a) => ({
@@ -120,8 +127,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           </div>
         </section>
 
-        {/* Timeline */}
-        <section className="lg:col-span-2">
+        {/* Conversation + Timeline */}
+        <section className="lg:col-span-2 flex flex-col gap-6">
+          <ChatHistory messages={chatMessages} contactName={contactName(lead.contact)} ownerName={lead.owner.name} />
+
           <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Timeline · {timeline.length}
