@@ -43,3 +43,40 @@ describe("email gateway adapter", () => {
     );
   });
 });
+
+const smtp = { host: "smtp.gmail.com", port: 465, secure: true, user: "sales@example.test", pass: "app-password" };
+
+describe("email SMTP transport", () => {
+  it("fails closed (non-retryable) when SMTP is not fully configured", async () => {
+    await expect(
+      sendEmailMessage(input, { enabled: true, transport: "smtp", smtp: { ...smtp, pass: "" } }),
+    ).resolves.toMatchObject({ ok: false, retryable: false });
+  });
+
+  it("sends over SMTP and returns the provider message id", async () => {
+    const sendMailImpl = vi.fn().mockResolvedValue({ messageId: "<abc@gmail.com>" });
+
+    const result = await sendEmailMessage(input, { enabled: true, transport: "smtp", smtp, sendMailImpl });
+
+    expect(result).toEqual({ ok: true, providerMessageId: "<abc@gmail.com>", requestId: null });
+    expect(sendMailImpl).toHaveBeenCalledWith({
+      from: input.from,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+    });
+  });
+
+  it("marks auth failures non-retryable but connection timeouts retryable", async () => {
+    const authErr = Object.assign(new Error("Invalid login"), { code: "EAUTH" });
+    const timeoutErr = Object.assign(new Error("Connection timeout"), { code: "ETIMEDOUT" });
+
+    await expect(
+      sendEmailMessage(input, { enabled: true, transport: "smtp", smtp, sendMailImpl: vi.fn().mockRejectedValue(authErr) }),
+    ).resolves.toMatchObject({ ok: false, retryable: false });
+
+    await expect(
+      sendEmailMessage(input, { enabled: true, transport: "smtp", smtp, sendMailImpl: vi.fn().mockRejectedValue(timeoutErr) }),
+    ).resolves.toMatchObject({ ok: false, retryable: true });
+  });
+});
