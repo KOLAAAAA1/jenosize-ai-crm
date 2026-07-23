@@ -1,8 +1,21 @@
 @import "tailwindcss";
 
+/* Theme is user-toggleable, light by default. `dark:` variants are class-based:
+   they apply only under a `.dark` ancestor, which the navbar toggle adds/removes
+   on <html> (persisted to localStorage; restored pre-paint by the inline script
+   in the root layout). No `.dark` class → light. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  color-scheme: light;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -10,13 +23,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "./logout-button";
+import { ThemeToggle } from "./theme-toggle";
 
 type SessionUser = { name: string; email: string; role: string };
 
@@ -28,6 +29,7 @@ function isActive(pathname: string, href: string): boolean {
 export function AppHeader({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const navLinks = user.role === "SALES" ? NAV_LINKS.filter((link) => link.href !== "/companies" && link.href !== "/contacts") : NAV_LINKS;
 
   // While the drawer is open: lock background scroll and close on Escape.
   // (The drawer also closes on link tap via each link's onClick below — closing
@@ -64,7 +66,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
             AI CRM
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
-            {NAV_LINKS.map((l) => (
+            {navLinks.map((l) => (
               <Link key={l.href} href={l.href} className={desktopLink(isActive(pathname, l.href))}>
                 {l.label}
               </Link>
@@ -72,7 +74,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
           </nav>
         </div>
 
-        {/* Right — profile + sign out (desktop) */}
+        {/* Right — theme toggle + profile + sign out (desktop) */}
         <div className="hidden items-center gap-3 md:flex">
           <div className="min-w-0 text-right">
             <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">{user.name}</p>
@@ -80,26 +82,30 @@ export function AppHeader({ user }: { user: SessionUser }) {
               {user.email} · {user.role}
             </p>
           </div>
+          <ThemeToggle />
           <div className="shrink-0">
             <LogoutButton />
           </div>
         </div>
 
-        {/* Right — hamburger (mobile) */}
-        <button
-          type="button"
-          onClick={() => setMenuOpen(true)}
-          aria-label="Open menu"
-          aria-expanded={menuOpen}
-          aria-controls="mobile-nav"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-300 text-zinc-700 hover:bg-zinc-100 md:hidden dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
+        {/* Right — theme toggle + hamburger (mobile) */}
+        <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            aria-controls="mobile-nav"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Mobile drawer — collapsible sidebar */}
@@ -126,7 +132,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
             </div>
 
             <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-              {NAV_LINKS.map((l) => (
+              {navLinks.map((l) => (
                 <Link
                   key={l.href}
                   href={l.href}
