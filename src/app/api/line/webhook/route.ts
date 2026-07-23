@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { recordInvalidLineWebhook, processLineWebhook } from "@/lib/line/service";
 import { autoReplyToWebhook } from "@/lib/line/autoreply";
+import { processFollowLifecycle } from "@/lib/line/follow";
 import { verifyLineSignature } from "@/lib/line/signature";
 import { logger } from "@/lib/logger";
 
@@ -37,6 +38,10 @@ export async function POST(req: Request) {
       return contact?.autoReplyEnabled ?? false;
     },
   });
+
+  // Friend-add / block lifecycle: welcome new followers with the LIFF link,
+  // opt-out contacts who blocked the OA. Best-effort (never throws).
+  await processFollowLifecycle(prisma, rawBody);
 
   if (result.status === "invalid") {
     logger.warn("line.webhook.invalid_payload", { error: result.error });

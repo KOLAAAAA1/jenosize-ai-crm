@@ -79,3 +79,16 @@ export const liffRegisterSchema = z.object({
   consent: z.boolean().default(false),
 });
 export type LiffRegisterFormInput = z.infer<typeof liffRegisterSchema>;
+
+// Follow-up task on a lead (PLAN §11.2). `dueAt` is an optional yyyy-mm-dd string
+// from a date input; the action converts it to a Date.
+export const taskSchema = z.object({
+  title: z.string().trim().min(1, "Task title is required").max(200),
+  dueAt: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? v : null))
+    .refine((v) => v === null || !Number.isNaN(Date.parse(v)), { message: "Invalid due date" }),
+});
+export type TaskInput = z.infer<typeof taskSchema>;

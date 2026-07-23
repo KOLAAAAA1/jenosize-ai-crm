@@ -7,6 +7,7 @@ import { StageMover } from "./stage-mover";
 import { CopilotPanel, type PendingSuggestion } from "./copilot-panel";
 import { LineDraftsPanel, type PendingLineDraft } from "./line-drafts-panel";
 import { ChatHistory, type ChatMessage } from "./chat-history";
+import { TasksPanel, type LeadTask } from "./tasks-panel";
 import { copilotResultSchema, type CopilotSuggestion } from "@/lib/ai/schema";
 
 type TimelineItem =
@@ -25,6 +26,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       activities: { include: { user: true }, orderBy: { createdAt: "desc" } },
       messages: { orderBy: { createdAt: "desc" } },
       suggestions: { where: { status: "SUGGESTED" }, orderBy: { createdAt: "desc" } },
+      tasks: { orderBy: [{ status: "desc" }, { dueAt: "asc" }, { createdAt: "asc" }] },
     },
   });
 
@@ -41,6 +43,13 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const pendingLineDrafts: PendingLineDraft[] = lead.messages
     .filter((m) => m.direction === "OUT" && (m.status === "DRAFT" || m.status === "FAILED"))
     .map((m) => ({ id: m.id, body: m.body, status: m.status as "DRAFT" | "FAILED" }));
+
+  const leadTasks: LeadTask[] = lead.tasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    dueAt: t.dueAt ? t.dueAt.toISOString() : null,
+    status: t.status,
+  }));
 
   // LINE conversation as a chat thread (oldest → newest) — handover evidence.
   const chatMessages: ChatMessage[] = lead.messages
@@ -124,6 +133,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
           <div className="mt-4">
             <LineDraftsPanel drafts={pendingLineDrafts} />
+          </div>
+
+          <div className="mt-4">
+            <TasksPanel leadId={lead.id} tasks={leadTasks} />
           </div>
         </section>
 

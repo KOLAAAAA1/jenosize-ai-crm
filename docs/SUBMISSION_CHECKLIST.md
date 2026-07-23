@@ -44,7 +44,7 @@ Current local result:
 
 - `pnpm exec tsc --noEmit`: passed
 - `pnpm exec eslint`: passed
-- `pnpm test`: 12 files / 82 tests passed
+- `pnpm test`: 14 files / 91 tests passed
 - `pnpm build`: passed (Vercel production build completed in 47s)
 - `pnpm predeploy:check`: passes against `.env.production` (Neon pooled/direct URLs, https remote `APP_URL`). Still fails against local `.env` by design (local Docker URLs, local HTTP `APP_URL`).
 - `pnpm submission:audit`: checks required evidence files, package scripts, known test-count docs, secret-looking tracked values, and current deploy-env readiness. Local mode passes with a deploy-env warning; `SUBMISSION_REQUIRE_EXTERNAL=true pnpm submission:audit` correctly fails until remote `APP_URL` and DB env are set.
@@ -146,3 +146,4 @@ pnpm smoke:deploy
 - [ ] LINE OA QR code or test instructions — *from LINE Developers console (Bot basic ID `@488yhaah`); repoint webhook to the Vercel URL first*
 - [x] `docs/AI_USAGE_LOG.md`
 - [ ] 3-5 minute walkthrough video using `docs/WALKTHROUGH_SCRIPT.md`
+- [ ] Convert to public visibility `gh repo edit --visibility public`

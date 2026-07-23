@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { applyStageMove } from "@/lib/leads-service";
+import { createTaskForLead, toggleTask } from "@/lib/tasks-service";
 import { approveAndSendLineDraft, saveLineDraftFromAiSuggestion } from "@/lib/line/outbound";
+import { taskSchema } from "@/lib/validation";
 import type { Stage } from "@prisma/client";
 
 export type MoveStageResult = { ok: true } | { ok: false; error: string };
@@ -69,5 +71,44 @@ export async function approveAndSendLineMessage(messageId: string): Promise<Send
   if (!res.ok) return { ok: false, error: res.error };
 
   revalidatePath(`/leads/${res.leadId}`);
+  return { ok: true };
+}
+
+export type TaskActionResult = { ok: true } | { ok: false; error: string };
+
+// Create a follow-up task on a lead. Owner = current session user (no assigning
+// to others in this slice — PLAN §11.2 scope cap).
+export async function createTask(leadId: string, input: { title: string; dueAt?: string }): Promise<TaskActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Unauthorized" };
+
+  const parsed = taskSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid task" };
+  }
+
+  const res = await createTaskForLead(prisma, {
+    leadId,
+    ownerId: user.id,
+    title: parsed.data.title,
+    dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/tasks");
+  return { ok: true };
+}
+
+// Flip a task OPEN ⇄ DONE. Guarded so a user can only toggle their own tasks.
+export async function toggleTaskDone(taskId: string): Promise<TaskActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Unauthorized" };
+
+  const res = await toggleTask(prisma, { taskId, userId: user.id });
+  if (!res.ok) return { ok: false, error: res.error };
+
+  revalidatePath(`/leads/${res.leadId}`);
+  revalidatePath("/tasks");
   return { ok: true };
 }

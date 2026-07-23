@@ -21,11 +21,20 @@ const lineTextMessageEventSchema = z.object({
     .optional(),
 });
 
-// Friend-add / re-add. Carries a replyToken (used by the test auto-reply) but no
-// message. `unfollow` (block) carries neither, so it is not modeled here.
+// Friend-add / re-add. Carries a replyToken (used for the greeting reply /
+// LIFF welcome) but no message.
 const lineFollowEventSchema = z.object({
   type: z.literal("follow"),
   replyToken: z.string().min(1).optional(),
+  source: z.object({
+    type: z.string(),
+    userId: z.string().min(1).optional(),
+  }),
+});
+
+// Block / remove-friend. No replyToken (can't reply); drives consent opt-out.
+const lineUnfollowEventSchema = z.object({
+  type: z.literal("unfollow"),
   source: z.object({
     type: z.string(),
     userId: z.string().min(1).optional(),
@@ -39,6 +48,7 @@ export const lineWebhookPayloadSchema = z.object({
 
 export type LineTextMessageEvent = z.infer<typeof lineTextMessageEventSchema>;
 export type LineFollowEvent = z.infer<typeof lineFollowEventSchema>;
+export type LineUnfollowEvent = z.infer<typeof lineUnfollowEventSchema>;
 export type LineWebhookPayload = z.infer<typeof lineWebhookPayloadSchema>;
 
 export function parseLineWebhookPayload(rawBody: string): { ok: true; payload: LineWebhookPayload } | { ok: false; error: string } {
@@ -59,5 +69,10 @@ export function parseTextMessageEvent(event: unknown): LineTextMessageEvent | nu
 
 export function parseFollowEvent(event: unknown): LineFollowEvent | null {
   const result = lineFollowEventSchema.safeParse(event);
+  return result.success ? result.data : null;
+}
+
+export function parseUnfollowEvent(event: unknown): LineUnfollowEvent | null {
+  const result = lineUnfollowEventSchema.safeParse(event);
   return result.success ? result.data : null;
 }

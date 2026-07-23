@@ -1,5 +1,5 @@
 // AI CRM MVP — data model (PLAN.md §3)
-// 8 tables. Idempotency + intent are enforced at the DB layer via unique
+// 9 tables. Idempotency + intent are enforced at the DB layer via unique
 // constraints and deliberate FK cascade choices, not just in app code.
 
 generator client {
@@ -93,6 +93,11 @@ enum ConsentStatus {
   OPTED_OUT
 }
 
+enum TaskStatus {
+  OPEN
+  DONE
+}
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -107,6 +112,7 @@ model User {
 
   ownedLeads Lead[]     @relation("LeadOwner")
   activities Activity[]
+  tasks      Task[]
 }
 
 model Company {
@@ -165,12 +171,34 @@ model Lead {
   activities  Activity[]
   messages    Message[]
   suggestions AiSuggestion[]
+  tasks       Task[]
 
   @@index([companyId])
   @@index([contactId])
   @@index([ownerId])
   @@index([stage])
   @@index([source])
+}
+
+// Follow-up tasks / reminders on a lead (PLAN §11.2). Owner-scoped; a due date
+// drives the "my tasks due" view. Append-only history is not needed here — a task
+// is a small mutable to-do (OPEN ⇄ DONE).
+model Task {
+  id          String     @id @default(cuid())
+  leadId      String
+  ownerId     String
+  title       String
+  dueAt       DateTime? // optional; overdue = OPEN && dueAt < now
+  status      TaskStatus @default(OPEN)
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+
+  lead  Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([ownerId, status]) // powers "my open tasks"
+  @@index([dueAt])
 }
 
 // Immutable timeline. Rows are appended, never updated.
