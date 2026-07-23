@@ -498,3 +498,45 @@ A read-only **chat-thread view** of the LINE conversation on the lead detail pag
 - `scripts/seed-demo-chat.ts` — seeds a coherent Thai buy/sell conversation onto a demo lead (`led_00113`) so the panel demonstrates realistically; run on local + prod. Deployed + live-verified.
 
 **Known limitation (honest):** outbound bubbles are labeled with the lead's **current owner**, not the actual sender at send-time — `Message` has no per-message `senderUserId` (only `Activity` records a `userId`). Conversation *content* is fully preserved for handover; preserving the true sender label across an owner change would need a small `Message.senderUserId` schema addition — deferred as not worth it for the MVP.
+
+---
+
+## 11.7 Mobile & Tablet Responsive — Plan (checklist)
+
+The JD requires a *responsive website* (Part 1). Current state (audited): breakpoints exist on the detail pages, pipeline board, and dashboard; the three list pages rely on horizontal-scroll tables; the app shell (nav header), forms, login, and the tasks page have no explicit responsive treatment. Target the standard Tailwind breakpoints — **`sm` 640px, `md` 768px (tablet), `lg` 1024px** — mobile-first (base styles = phone, then scale up). Scope cap: Tailwind utility classes only — **no** separate mobile app, no user-agent sniffing, no new dependencies.
+
+> **Implementation status (2026-07-23):** Full audit found the app already largely responsive; the only real gaps were the **nav header** and the two **`grid-cols-2` forms**, both now fixed (pure Tailwind, no new deps). `[x]` = verified as a code/class fact by reading the source. `[ ]` items in the **Verification** block below require a browser pass at 375px/768px that has **not** been run (browser tooling was unavailable this session) — do not treat them as done. Tests/lint/typecheck/build all pass after the changes.
+>
+> Changes: `(app)/layout.tsx` header now `flex-wrap` — brand + user/logout on row 1, nav on its own horizontally-scrollable full-width row on mobile, single line on `md+`; `contact-form.tsx` (×3) and `company-form.tsx` (×1) field rows are `grid-cols-1 sm:grid-cols-2`.
+
+### App shell (`(app)/layout.tsx`)
+- [x] Header nav (6 links: Dashboard/Leads/Pipeline/Tasks/Companies/Contacts) wraps or collapses below `md` instead of overflowing — nav is `w-full` + `overflow-x-auto` on its own row below `md`, single inline row at `md+`
+- [x] User name / email / role + Sign-out stack cleanly on mobile — brand + user/logout share row 1 (`justify-between`); user text `min-w-0`/`truncate`, logout `shrink-0`
+- [ ] No horizontal body scroll at 375px or 768px — **needs browser pass** (the header's `-mx-4 px-4` full-bleed nav is the classic body-scroll risk; confirm in devtools)
+
+### List pages (`leads`, `contacts`, `companies`)
+- [x] Wide tables either reflow to stacked cards below `md`, or keep the `overflow-x-auto` scroll but confirm rows aren't clipped and the container (not the page body) scrolls — kept the pre-existing `overflow-x-auto` container-scroll (`min-w-[820px]` table inside an `overflow-x-auto` wrapper)
+- [x] Filter/search bars wrap to multiple rows on narrow widths — all three filters already `flex flex-wrap`
+- [x] Pagination controls stay usable on mobile — simple `flex justify-between` with `px-3 py-1.5` controls
+- ~~confirm the two above at 375px in a browser~~ (still recommended)
+
+### Detail, board & dashboard
+- [x] Lead detail: `lg:grid-cols-3` collapses to a single column on mobile/tablet — base grid is 1 col; profile/panels stack above chat/timeline
+- [x] Dashboard stat/pipeline grid reflows — already `grid-cols-2 sm:grid-cols-4` and `grid-cols-2 sm:grid-cols-5`
+- [ ] Pipeline board columns scroll horizontally (touch) on mobile without breaking drag/drop — **reinterpreted:** board *stacks vertically* (`grid-cols-1 sm:grid-cols-2 xl:grid-cols-5`) rather than horizontal scroll. NB: drag/drop uses native HTML5 DnD, which does **not** fire on touch at all — DnD is mouse/desktop-only regardless of layout. Left unchecked because the item as worded (horizontal scroll + touch DnD) is not what ships.
+- [x] Chat-history, Tasks, Copilot, and LINE-drafts panels fit narrow widths (no fixed widths, bubbles wrap) — chat bubbles are `max-w-[75%]` + `break-words`; other panels use only `min-w-0 flex-1` (grep-confirmed, no fixed px widths)
+
+### Forms & auth
+- [x] Contact/company create+edit: `grid-cols-2` field rows → single column below `sm` — changed to `grid-cols-1 sm:grid-cols-2` (contact ×3, company ×1)
+- [x] Inputs and buttons are full-width and tappable on mobile — inputs are full-width in `flex-col` labels; buttons `px-4 py-2`
+- [x] Login page stays centered and full-width on small screens — already `w-full max-w-sm` centered with `px-4`
+
+### Customer-facing LIFF (already mobile-first)
+- [ ] `/liff` form + desktop-landing QR verified at phone widths (`max-w-md` should already hold) — **not verified this session** (no browser)
+
+### Verification
+- [ ] Manually check every page at **375px (mobile)** and **768px (tablet)** in devtools — **NOT DONE** (browser tooling unavailable this session)
+- [ ] No element overflows the viewport; tap targets ≥ ~40px; text stays legible (no `text-[10px]` on primary content) — **NOT DONE** (needs the browser pass above)
+- [ ] Re-run the walkthrough spot-check the BA flagged (§action list) before recording the video — user task
+
+**Effort:** S–M (~half-day). Most pages already stack via flex/grid; the real work is the **nav header**, the **list-table reflow decision**, and a pass over the **forms**.

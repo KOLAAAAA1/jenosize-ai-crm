@@ -73,7 +73,7 @@ export function ContactForm({
         {fieldError("companyId")}
       </label>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1">
           <span className={labelClass}>First name *</span>
           <input name="firstName" defaultValue={initial?.firstName ?? ""} className={fieldClass} autoFocus />
@@ -86,7 +86,7 @@ export function ContactForm({
         </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1">
           <span className={labelClass}>Email</span>
           <input name="email" type="email" defaultValue={initial?.email ?? ""} className={fieldClass} />
@@ -105,7 +105,7 @@ export function ContactForm({
         {fieldError("title")}
       </label>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1">
           <span className={labelClass}>LINE user id</span>
           <input name="lineUserId" defaultValue={initial?.lineUserId ?? ""} placeholder="U…" className={fieldClass} />
