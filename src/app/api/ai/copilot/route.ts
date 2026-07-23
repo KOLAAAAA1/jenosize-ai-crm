@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireApiUser } from "@/lib/auth";
+import { leadScopeFor } from "@/lib/access-control";
 import { buildCopilotContext } from "@/lib/ai/context";
 import { generateSuggestion } from "@/lib/ai/copilot";
+import { crmEntityIdSchema } from "@/lib/validation";
 
 // The copilot may call the Anthropic SDK (Node APIs) — force the Node runtime.
 export const runtime = "nodejs";
@@ -16,11 +18,11 @@ export async function POST(req: Request) {
   if (user instanceof NextResponse) return user; // 401 for unauthenticated API callers
 
   const body = await req.json().catch(() => null);
-  const leadId = typeof body?.leadId === "string" ? body.leadId : null;
-  if (!leadId) return NextResponse.json({ error: "leadId is required" }, { status: 400 });
+  const leadId = crmEntityIdSchema.safeParse(body?.leadId);
+  if (!leadId.success) return NextResponse.json({ error: leadId.error.issues[0]?.message ?? "leadId is required" }, { status: 400 });
 
-  const lead = await prisma.lead.findUnique({
-    where: { id: leadId },
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId.data, ...leadScopeFor(user) },
     include: {
       company: true,
       contact: true,
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
 
   const row = await prisma.aiSuggestion.create({
     data: {
-      leadId,
+      leadId: leadId.data,
       type: "SUMMARY",
       payload: suggestion,
       model: suggestion.model,
@@ -45,6 +47,6 @@ export async function POST(req: Request) {
     },
   });
 
-  revalidatePath(`/leads/${leadId}`);
+  revalidatePath(`/leads/${leadId.data}`);
   return NextResponse.json({ id: row.id, suggestion });
 }

@@ -1,7 +1,12 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { requireUser } from "@/lib/auth";
+import { canManageDirectory } from "@/lib/access-control";
 import { CompanyForm } from "../company-form";
 
-export default function NewCompanyPage() {
+export default async function NewCompanyPage() {
+  const user = await requireUser();
+  if (!canManageDirectory(user)) notFound();
   return (
     <div className="flex flex-col gap-6">
       <div>

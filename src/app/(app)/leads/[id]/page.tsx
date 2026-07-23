@@ -1,24 +1,32 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { canReassignLead, leadScopeFor } from "@/lib/access-control";
 import { ACTIVITY_META, MESSAGE_STATUS_META, SOURCE_META, STAGE_META, messageDirectionLabel, contactName } from "@/lib/crm";
 import { formatDateTime, formatTHB, timeAgo } from "@/lib/format";
 import { StageMover } from "./stage-mover";
 import { CopilotPanel, type PendingSuggestion } from "./copilot-panel";
 import { LineDraftsPanel, type PendingLineDraft } from "./line-drafts-panel";
+import { EmailPanel, type PendingEmailDraft } from "./email-panel";
 import { ChatHistory, type ChatMessage } from "./chat-history";
 import { TasksPanel, type LeadTask } from "./tasks-panel";
+import { DealFieldsPanel } from "./deal-fields-panel";
+import { OwnerAssigner } from "./owner-assigner";
 import { copilotResultSchema, type CopilotSuggestion } from "@/lib/ai/schema";
+import type { MessageChannel } from "@prisma/client";
 
 type TimelineItem =
   | { kind: "activity"; at: Date; id: string; type: keyof typeof ACTIVITY_META; body: string; actor: string | null }
-  | { kind: "message"; at: Date; id: string; direction: "IN" | "OUT"; status: keyof typeof MESSAGE_STATUS_META; body: string };
+  | { kind: "message"; at: Date; id: string; channel: MessageChannel; direction: "IN" | "OUT"; status: keyof typeof MESSAGE_STATUS_META; body: string };
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = await requireUser();
 
-  const lead = await prisma.lead.findUnique({
-    where: { id },
+  const [lead, assignableOwners] = await Promise.all([
+    prisma.lead.findFirst({
+    where: { id, ...leadScopeFor(user) },
     include: {
       company: true,
       contact: true,
@@ -26,9 +34,20 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       activities: { include: { user: true }, orderBy: { createdAt: "desc" } },
       messages: { orderBy: { createdAt: "desc" } },
       suggestions: { where: { status: "SUGGESTED" }, orderBy: { createdAt: "desc" } },
-      tasks: { orderBy: [{ status: "desc" }, { dueAt: "asc" }, { createdAt: "asc" }] },
+      tasks: {
+        where: canReassignLead(user) ? {} : { ownerId: user.id },
+        orderBy: [{ status: "desc" }, { dueAt: "asc" }, { createdAt: "asc" }],
+      },
     },
-  });
+    }),
+    canReassignLead(user)
+      ? prisma.user.findMany({
+          where: { role: { in: ["MANAGER", "SALES"] } },
+          select: { id: true, name: true, role: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
+  ]);
 
   if (!lead) notFound();
 
@@ -41,8 +60,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   );
 
   const pendingLineDrafts: PendingLineDraft[] = lead.messages
-    .filter((m) => m.direction === "OUT" && (m.status === "DRAFT" || m.status === "FAILED"))
+    .filter((m) => m.channel === "LINE" && m.direction === "OUT" && (m.status === "DRAFT" || m.status === "FAILED"))
     .map((m) => ({ id: m.id, body: m.body, status: m.status as "DRAFT" | "FAILED" }));
+
+  const pendingEmailDrafts: PendingEmailDraft[] = lead.messages
+    .filter((m) => m.channel === "EMAIL" && m.direction === "OUT" && (m.status === "DRAFT" || m.status === "FAILED"))
+    .map((m) => ({
+      id: m.id,
+      subject: m.subject ?? "(No subject)",
+      body: m.body,
+      status: m.status as "DRAFT" | "FAILED",
+      toAddress: m.toAddress,
+    }));
 
   const leadTasks: LeadTask[] = lead.tasks.map((t) => ({
     id: t.id,
@@ -71,6 +100,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       at: m.createdAt,
       id: m.id,
       direction: m.direction,
+      channel: m.channel,
       status: m.status,
       body: m.body,
     })),
@@ -83,6 +113,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     { label: "Owner", value: lead.owner.name },
     { label: "Source", value: SOURCE_META[lead.source] },
     { label: "Value", value: formatTHB(lead.valueTHB) },
+    { label: "Probability", value: lead.probability != null ? `${lead.probability}%` : "Not set" },
+    { label: "Expected close", value: lead.expectedCloseAt ? formatDateTime(lead.expectedCloseAt) : "Not set" },
     { label: "Score", value: lead.score != null ? String(lead.score) : "Not scored" },
     { label: "Created", value: formatDateTime(lead.createdAt) },
   ];
@@ -103,6 +135,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               {STAGE_META[lead.stage].label}
             </span>
             <StageMover leadId={lead.id} current={lead.stage} />
+            {canReassignLead(user) && (
+              <OwnerAssigner leadId={lead.id} ownerId={lead.ownerId} owners={assignableOwners} />
+            )}
           </div>
         </div>
       </div>
@@ -127,6 +162,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             )}
           </div>
 
+          <DealFieldsPanel
+            leadId={lead.id}
+            probability={lead.probability}
+            expectedCloseAt={lead.expectedCloseAt?.toISOString() ?? null}
+          />
+
           <div className="mt-4">
             <CopilotPanel leadId={lead.id} suggestions={pendingSuggestions} />
           </div>
@@ -134,6 +175,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <div className="mt-4">
             <LineDraftsPanel drafts={pendingLineDrafts} />
           </div>
+
+          <EmailPanel leadId={lead.id} drafts={pendingEmailDrafts} />
 
           <div className="mt-4">
             <TasksPanel leadId={lead.id} tasks={leadTasks} />
@@ -159,7 +202,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
                       <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                         {item.kind === "activity"
                           ? ACTIVITY_META[item.type].label
-                          : `LINE · ${messageDirectionLabel(item.direction)}`}
+                          : `${item.channel === "LINE" ? "LINE" : "Email"} · ${messageDirectionLabel(item.direction)}`}
                         {item.kind === "activity" && item.actor ? (
                           <span className="font-normal text-zinc-400"> · {item.actor}</span>
                         ) : null}

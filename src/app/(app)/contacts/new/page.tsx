@@ -1,10 +1,15 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { canManageDirectory } from "@/lib/access-control";
 import { ContactForm } from "../contact-form";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
 export default async function NewContactPage({ searchParams }: { searchParams: SearchParams }) {
+  const user = await requireUser();
+  if (!canManageDirectory(user)) notFound();
   const sp = await searchParams;
   const presetCompany = typeof sp.company === "string" ? sp.company : undefined;
   const companies = await prisma.company.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });

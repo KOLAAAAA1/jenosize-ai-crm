@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { canManageDirectory, leadScopeFor } from "@/lib/access-control";
 import { isStage, isSource, STAGE_META, SOURCE_META, contactName } from "@/lib/crm";
 import { buildLeadWhere } from "@/lib/leads-query";
 import { formatTHB, formatDate } from "@/lib/format";
@@ -14,6 +16,7 @@ function str(v: string | string[] | undefined): string | undefined {
 }
 
 export default async function LeadsPage({ searchParams }: { searchParams: SearchParams }) {
+  const user = await requireUser();
   const sp = await searchParams;
   const q = str(sp.q)?.trim() ?? "";
   const stageRaw = str(sp.stage);
@@ -23,7 +26,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
   const ownerId = str(sp.owner) || undefined;
   const page = Math.max(1, Number.parseInt(str(sp.page) ?? "1", 10) || 1);
 
-  const where = buildLeadWhere({ q, stage, source, ownerId });
+  const where = { ...buildLeadWhere({ q, stage, source, ownerId }), ...leadScopeFor(user) };
 
   const [total, leads, owners] = await Promise.all([
     prisma.lead.count({ where }),
@@ -34,7 +37,9 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
-    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    canManageDirectory(user)
+      ? prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
+      : Promise.resolve([]),
   ]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -64,7 +69,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
         </div>
       </div>
 
-      <LeadsFilters owners={owners} />
+      <LeadsFilters owners={owners} canFilterByOwner={canManageDirectory(user)} />
 
       <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
         <table className="w-full min-w-[820px] border-collapse text-sm">

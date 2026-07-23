@@ -6,7 +6,7 @@ import { STAGES, SOURCES, STAGE_META, SOURCE_META } from "@/lib/crm";
 
 type Owner = { id: string; name: string };
 
-export function LeadsFilters({ owners }: { owners: Owner[] }) {
+export function LeadsFilters({ owners, canFilterByOwner }: { owners: Owner[]; canFilterByOwner: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -17,7 +17,7 @@ export function LeadsFilters({ owners }: { owners: Owner[] }) {
   const stage = searchParams.get("stage") ?? "";
   const source = searchParams.get("source") ?? "";
   const owner = searchParams.get("owner") ?? "";
-  const hasFilters = Boolean(q || stage || source || owner);
+  const hasFilters = Boolean(q || stage || source || (canFilterByOwner && owner));
 
   const setParam = useCallback(
     (key: string, value: string) => {
@@ -67,12 +67,14 @@ export function LeadsFilters({ owners }: { owners: Owner[] }) {
         ))}
       </select>
 
-      <select value={owner} onChange={(e) => setParam("owner", e.target.value)} className={selectClass} aria-label="Filter by owner">
-        <option value="">All owners</option>
-        {owners.map((o) => (
-          <option key={o.id} value={o.id}>{o.name}</option>
-        ))}
-      </select>
+      {canFilterByOwner && (
+        <select value={owner} onChange={(e) => setParam("owner", e.target.value)} className={selectClass} aria-label="Filter by owner">
+          <option value="">All owners</option>
+          {owners.map((o) => (
+            <option key={o.id} value={o.id}>{o.name}</option>
+          ))}
+        </select>
+      )}
 
       {hasFilters && (
         <button

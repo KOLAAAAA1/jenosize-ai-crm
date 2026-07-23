@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { canManageDirectory } from "@/lib/access-control";
 import { buildCompanyWhere } from "@/lib/companies-query";
 import { CompaniesFilters } from "./companies-filters";
 
@@ -12,6 +15,8 @@ function str(v: string | string[] | undefined): string | undefined {
 }
 
 export default async function CompaniesPage({ searchParams }: { searchParams: SearchParams }) {
+  const user = await requireUser();
+  if (!canManageDirectory(user)) notFound();
   const sp = await searchParams;
   const q = str(sp.q)?.trim() ?? "";
   const industry = str(sp.industry) || undefined;

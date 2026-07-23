@@ -27,7 +27,7 @@ flowchart TD
 
     subgraph BACKEND["Backend services"]
         SKILL["crm-copilot skill → Claude API<br/>summary · score · next-best action · draft reply<br/>fallback: deterministic scorer"]
-        DB[("Prisma → PostgreSQL · Neon<br/>8 tables · migrations · idempotency constraints")]
+        DB[("Prisma → PostgreSQL · Neon<br/>9 tables · migrations · idempotency constraints")]
     end
 
     UI -->|"fetch (Zod-typed)"| CRM
@@ -61,7 +61,8 @@ Four request paths that exercise the boundary above. Each is a graded flow in th
 | 01 | **LINE inbound message** | `LINE → /api/line/webhook →` verify sig `→` dedupe `→` persist `Message` + `WebhookEvent` `→` map to lead `→` timeline |
 | 02 | **Ask AI on a lead** | `UI → /api/ai/copilot →` build context `→` Claude (or fallback) `→ AiSuggestion (SUGGESTED) →` Accept writes `Activity` |
 | 03 | **Approve & send LINE reply** | draft `→` human **Approve** `→` LINE send (mock adapter when disabled) `→ Message (SENT)` `→` retry-safe |
-| 04 | **Move a lead stage** | board drag `→ /api/crm/leads/:id →` update `stage` `→` write `STAGE_CHANGE` activity `→` timeline |
+| 04 | **Move a lead stage** | board drag `→` server action `→` update `stage` `→` write `STAGE_CHANGE` activity `→` timeline |
+| 05 | **Email inbound / outbound** | email gateway `→ /api/email/inbound →` map sender to Contact/Lead `→` timeline; CRM draft `→` explicit approval `→` gateway send |
 
 ---
 
@@ -201,6 +202,37 @@ Notes:
   Cloudflare account and a domain.
 - Override the local target with `TUNNEL_PORT` (default `3000`).
 
+## Email integration
+
+Email uses the same deliberate safety model as LINE: composing creates an
+auditable `Message(DRAFT)` and a user must click **Approve & send** before any
+provider call. The CRM contains a provider-neutral gateway seam rather than an
+embedded mail-provider credential:
+
+- Outbound delivery posts an authenticated, idempotent payload to
+  `EMAIL_OUTBOUND_WEBHOOK_URL` only when `EMAIL_ENABLED=true`.
+- Inbound mail is normalized by that gateway and posted to
+  `POST /api/email/inbound`, authenticated by `X-Email-Webhook-Secret`.
+- Inbound mail maps by the sender email (`Contact.email`), dedupes both delivery
+  event and provider message IDs, then persists an `EMAIL` message and timeline
+  activity.
+
+Set the five `EMAIL_*` environment variables in `.env.example` only after a
+mail gateway is available. The exact request/response contract and a provider
+activation checklist are in [`docs/EMAIL_INTEGRATION.md`](docs/EMAIL_INTEGRATION.md).
+
+## Roles and access
+
+The seeded `ADMIN`, `MANAGER`, and `SALES` roles are now enforced on every
+protected server action and API path:
+
+- **Admin / Manager:** shared lead queue, directory management, and manual lead reassignment.
+- **Sales:** only their own leads, tasks, AI suggestions, and outbound drafts; directory pages and mutations are unavailable.
+
+Manual assignment is intentionally the first routing increment. Automatic
+round-robin or territory assignment remains a business-rule decision rather
+than hidden behavior.
+
 ## API Notes
 
 | Route | Auth | Purpose |
@@ -210,6 +242,7 @@ Notes:
 | `GET /api/me` | session | Returns the current demo user |
 | `POST /api/ai/copilot` | session | Builds lead context, runs Claude or fallback, persists `AiSuggestion(SUGGESTED)` |
 | `POST /api/line/webhook` | LINE signature | Receives LINE webhooks; signature is the auth boundary |
+| `POST /api/email/inbound` | email gateway secret | Receives normalized inbound email; maps/dedupes it into the lead timeline |
 
 Server Actions own CRM mutations from the UI: stage moves, company/contact saves, suggestion review, LINE draft save, and LINE approve/send.
 
@@ -257,13 +290,13 @@ Current MVP logging is intentionally small:
 
 - Copilot model failures are logged as structured JSON before deterministic fallback is returned.
 - LINE webhook invalid signatures are persisted as `WebhookEvent(INVALID)` with a body hash and signature presence flag.
-- LINE send failures are persisted as `Message(FAILED)` plus a `LINE_OUT` Activity with retryability metadata.
+- LINE and email send failures are persisted as `Message(FAILED)` plus an Activity with retryability metadata.
 
 Production next steps:
 
 - Replace console logging with structured JSON logs carrying `requestId`, route, lead/contact/message IDs, provider request ID, and outcome.
-- Monitor webhook 401/400/5xx rate, duplicate webhook count, LINE send failures, AI fallback rate, DB connection pool utilization, and queue depth if the webhook is moved async.
-- Alert on LINE invalid-signature spikes, DLQ/non-retryable send failures, and sustained AI fallback rate.
+- Monitor webhook 401/400/5xx rate, duplicate webhook count, LINE/email send failures, AI fallback rate, DB connection pool utilization, and queue depth if the webhook is moved async.
+- Alert on LINE invalid-signature spikes, mail-gateway authorization failures, DLQ/non-retryable send failures, and sustained AI fallback rate.
 
 ---
 

@@ -48,6 +48,7 @@ enum ActivityType {
 
 enum MessageChannel {
   LINE
+  EMAIL
 }
 
 enum MessageDirection {
@@ -160,6 +161,8 @@ model Lead {
   stage       Stage    @default(NEW)
   source      Source   @default(MANUAL)
   valueTHB    Int      @default(0)
+  probability Int?     // 0–100; deliberately nullable until a rep qualifies the deal
+  expectedCloseAt DateTime?
   score       Int? // 0–100 qualification score (nullable until scored)
   scoreReason String?
   createdAt   DateTime @default(now())
@@ -178,6 +181,7 @@ model Lead {
   @@index([ownerId])
   @@index([stage])
   @@index([source])
+  @@index([expectedCloseAt])
 }
 
 // Follow-up tasks / reminders on a lead (PLAN §11.2). Owner-scoped; a due date
@@ -228,6 +232,13 @@ model Message {
   providerMessageId String?          @unique // idempotency for inbound LINE
   status            MessageStatus
   body              String
+  // LINE messages only use `body`; email messages additionally keep the
+  // envelope/subject values needed for a useful timeline and a provider-agnostic
+  // outbound/inbound integration.
+  subject           String?
+  fromAddress       String?
+  toAddress         String?
+  providerThreadId  String?
   createdAt         DateTime         @default(now())
 
   lead    Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)

@@ -111,7 +111,7 @@ WebhookEvent    id, provider, providerEventId(unique), signatureValid(bool),
 - [x] **README**: architecture, DB config, setup/run/test, demo creds, API notes, LINE setup, and monitoring notes done. Deployed URL live (https://jenosize-ai-crm.vercel.app); LINE QR pending (submission-package item, tracked in §11 / SUBMISSION_CHECKLIST).
 - [x] **Architecture + data-flow diagram** (Mermaid in README + standalone `docs/architecture.html`).
 - [x] API notes, `.env.example`, key trade-offs, known limitations, production next steps — API notes + `.env.example` + scaling notes + LINE event mapping/backfill helpers + predeploy check + deploy/submission audit scripts + submission checklist done; **deployed URL live**. (LINE QR still pending as a submission-package item.)
-- [x] **3 automated tests** (Vitest): **(1) core CRM flow — create lead→move stage→activity logged**, **(2) AI skill fallback**, and **(3) LINE webhook invalid-signature + replay idempotency** are done. Added outbound draft approval, greeting auto-reply, LIFF register/verify, Tasks, and LINE follow/unfollow coverage too. Latest full run: `91 passed` (14 files, typecheck clean).
+- [x] **3 automated tests** (Vitest): **(1) core CRM flow — create lead→move stage→activity logged**, **(2) AI skill fallback**, and **(3) LINE webhook invalid-signature + replay idempotency** are done. Added outbound draft approval, greeting auto-reply, LIFF register/verify, Tasks, LINE follow/unfollow, P1 deal/assignment, email gateway, and inbound-email coverage too. Latest full run: `99 passed` (18 files, typecheck clean).
 - [x] Structured logging + monitoring notes: JSON app logger + MVP audit rows + failure Activities done; README monitoring notes done.
 - [x] **AI-usage log**: sample prompts/tasks, what you reviewed/rejected, **one meaningful change after human inspection** documented in `docs/AI_USAGE_LOG.md`.
 - [~] Submission: repo + deployed URL + demo creds + LINE QR + **3–5 min walkthrough video** — **repo pushed** (github.com/KOLAAAAA1/jenosize-ai-crm, make public before submitting), **deployed URL + demo creds live**, walkthrough script/checklist done; **LINE QR + walkthrough video + real outbound-send screenshot still pending.**
@@ -135,7 +135,7 @@ Status: ✅ done · ◐ partial · ▫ pending
 | 7 | ✅ | 1.0 | `AiSuggestion` flow **done**: `/api/ai/copilot` persists SUGGESTED → CopilotPanel (Generate + Accept/Reject); LINE draft suggestions save `Message(DRAFT)` only after explicit click | P2 |
 | 8 | ✅ | 2.0 | LINE webhook done: raw-body signature verify, invalid-signature audit, event/message idempotency, contact/lead mapping, inbound `Message(RECEIVED)` + `LINE_IN` Activity; route-level tests pass | P2 |
 | 9 | ◐ | 1.0 | Outbound approval flow done locally: AI draft → `Message(DRAFT)` → human approve/send → mock or real LINE push adapter with `X-Line-Retry-Key`. **Inbound now proven with a real device** via Cloudflare tunnel (signature-valid webhook → Contact/Lead mapping → `LINE_IN` Activity). Real outbound phone send unblocked locally (`LINE_ENABLED=true`, tunnel HTTPS, live creds) — evidence capture pending | P2 |
-| 10 | ✅ | 1.0 | Vitest set up; required tests done (CRM flow, AI fallback, LINE security/idempotency) plus outbound approval, unmapped-webhook backfill, greeting auto-reply, LIFF register/verify, Tasks, and LINE follow/unfollow coverage. Latest full run: **14 files / 91 tests passed** | P3 |
+| 10 | ✅ | 1.0 | Vitest set up; required tests done (CRM flow, AI fallback, LINE security/idempotency) plus outbound approval, unmapped-webhook backfill, greeting auto-reply, LIFF register/verify, Tasks, LINE follow/unfollow, P1 deal/assignment, and email coverage. Latest full run: **18 files / 99 tests passed** | P3 |
 | 11 | ◐ | 1.0 | Architecture diagram + `.env.example` + DB-config + README setup/API/LINE/monitoring notes + AI-usage log + LINE mapping/backfill helpers + predeploy check + deploy/submission audit scripts + submission checklist + walkthrough script **done**; **deployed URL live** (https://jenosize-ai-crm.vercel.app · demo `admin@jenosize.demo` / `Demo1234!`); LINE QR + 3–5 min walkthrough video pending | P3 |
 | — | — | — | *(Video recorded after, outside the 16h coding budget)* | P3 |
 
@@ -188,7 +188,7 @@ Only one webhook URL can be registered in the LINE console at a time, so switch 
 
 ## 9. Open Assumptions (documented, not blocking — per the brief's anti-red-flag guidance)
 
-- "Demo auth" = seeded credentials over HTTPS; no SSO/RBAC in MVP (noted as prod next step).
+- "Demo auth" = seeded credentials over HTTPS. Basic role enforcement is now shipped (admin/manager shared access; sales limited to owned leads/tasks); SSO, user lifecycle management, and richer permission configuration remain production next steps.
 - Single LINE OA channel; one-to-one LINE user ↔ Contact mapping via `lineUserId`.
 - Synthetic data only; no real PII. Seed matches the scenario's stated scale (~2,000 contacts, ~300 leads) so list/search/filter/pagination are exercised realistically; this is demo/synthetic scale, not a live-load or throughput target.
 - "Reusable AI skill" = a documented `SKILL.md` contract + a provider-agnostic call site, so it can be lifted into other Jenosize projects.
@@ -314,7 +314,7 @@ Items deliberately deferred — captured here so they aren't lost, none required
 | 3 | **Global search** | Reps need to pull up a contact/lead in seconds, not page through lists | One top-bar box → matches name / company / phone / email across Contacts + Leads + Companies, reusing existing query filters | No fuzzy matching, no Elasticsearch, no search-as-you-type infra — a simple `contains` query |
 | 4 | **Won/Lost reason capture** | Tiny to add, but essential for pipeline hygiene and honest forecasting | On move to `WON`/`LOST`, capture a short reason (enum + optional note) into the existing stage-change `Activity` | No separate analytics module — the reason just rides on the Activity already being written |
 
-**Explicitly out of the must-have line** (heavier, defer until there's real demand): full email 2-way sync (OAuth + polling), sequences/cadences, CPQ/quote generation, mobile app, SSO/RBAC. Keeping these out is a deliberate scope decision, not an oversight.
+**Explicitly out of the must-have line** (heavier, defer until there's real demand): provider-native OAuth/polling mail sync, sequences/cadences, CPQ/quote generation, mobile app, and SSO. Keeping these out is a deliberate scope decision, not an oversight.
 
 ### 11.2 Tasks & Follow-up Reminders — ✅ Shipped
 
@@ -381,7 +381,7 @@ Full picture of what a sales CRM offers, scored against this MVP — so the defe
 
 **Lead & Pipeline Management**
 - ✅ Multi-source capture (website/manual/LINE) · ✅ Kanban pipeline + drag-drop stage moves · ✅ Search/filter/pagination
-- ◐ Lead scoring (heuristic + AI; not a real rubric) · ➕ Lead assignment/routing · ➕ Deal fields (probability %, close date) · ➕ Multiple pipelines · ➕ Forecasting
+- ◐ Lead scoring (heuristic + AI; not a real rubric) · ◐ Lead assignment/routing (manual assignment shipped; automated routing deferred) · ✅ Deal fields (probability %, expected close date) · ➕ Multiple pipelines · ➕ Forecasting
 
 **Activity, Tasks & Timeline**
 - ✅ Unified activity timeline · ✅ Audit trail (webhook + activity log)
@@ -389,7 +389,7 @@ Full picture of what a sales CRM offers, scored against this MVP — so the defe
 
 **Communication / Omnichannel**
 - ✅ LINE OA inbound capture + approval-based outbound · ✅ chat-history view (§11.6) · ✅ per-contact greeting auto-reply (§11.5) · ✅ LIFF self-registration (§11.4)
-- ➕ Email integration (send/receive/tracking) · ➕ Templates · ➕ Sequences/cadences · ➕ Click-to-call/VoIP · ➕ SMS · ➕ Shared inbox
+- ◐ Email integration (draft/approval, outbound gateway + normalized inbound webhook; provider activation pending) · ➕ Templates · ➕ Sequences/cadences · ➕ Click-to-call/VoIP · ➕ SMS · ➕ Shared inbox
 
 **AI / Automation**
 - ✅ AI summary, qualification score+reasons, next-best action · ✅ AI draft LINE reply (separated from confirmed sends) · ✅ Deterministic fallback
@@ -403,8 +403,8 @@ Full picture of what a sales CRM offers, scored against this MVP — so the defe
 - ➕ Pipeline conversion / win-rate / activity reports · ➕ Quota & goal tracking · ➕ Leaderboards · ➕ Forecast reports
 
 **Collaboration, Access & Admin**
-- ◐ Auth + demo login · ✅ Structured logging / monitoring notes
-- ➕ RBAC (admin/manager/sales) + SSO · ➕ Territory management · ➕ Manager coaching views
+- ✅ Auth + role enforcement (admin/manager/sales) · ✅ Structured logging / monitoring notes
+- ➕ SSO · ➕ Territory management · ➕ Manager coaching views
 
 ### Prioritized enhancement roadmap
 
@@ -416,10 +416,10 @@ Ranked by rep/manager value ÷ build cost. P0 = must-haves from §11.1 (start he
 | **P0** | Basic reporting dashboard | ◐ | S | Managers won't adopt what they can't measure (20-person team) |
 | **P0** | Global search | ➕ | S | Seconds-to-find a contact/lead; thin `contains` query |
 | **P0** | Won/Lost reason capture | ➕ | XS | Pipeline hygiene + honest forecasting; rides existing Activity |
-| **P1** | Deal fields (probability %, close date) | ➕ | S | Unlocks real forecasting; small schema add |
-| **P1** | Lead assignment/routing | ➕ | M | Needed once >1 rep shares a queue |
-| **P1** | RBAC (admin/manager/sales) | ◐ | M | Data-access correctness before wider rollout |
-| **P1** | Email integration (send/receive) | ➕ | L | Most B2B talk lives in email; OAuth + sync is heavy |
+| **P1** | Deal fields (probability %, close date) | ✅ | S | Shipped — editable probability + expected close date, with immutable audit Activity |
+| **P1** | Lead assignment/routing | ◐ | M | Manual manager/admin assignment shipped; automatic round-robin/territory routing still needs a business rule |
+| **P1** | RBAC (admin/manager/sales) | ✅ | M | Shipped — directory and reassign rights for admin/manager; sales scoped to owned leads/tasks |
+| **P1** | Email integration (send/receive) | ◐ | L | Shipped provider-neutral draft/send gateway + normalized inbound webhook; live mailbox/gateway configuration is external |
 | **P2** | Workflow automation (triggers→actions) | ➕ | L | High leverage but needs a rules engine — build after signal |
 | **P2** | Sequences/cadences · Dedup/merge · Segmentation | ➕ | M–L | Scale/marketing features; premature for an internal MVP |
 | **P2** | CPQ/quotes · Mobile app · SSO · Territory mgmt | ➕ | L | Enterprise-tier; defer until the core loop is adopted |

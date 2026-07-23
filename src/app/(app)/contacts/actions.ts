@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { Prisma, type ConsentStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
-import { contactSchema } from "@/lib/validation";
+import { canManageDirectory } from "@/lib/access-control";
+import { autoReplyToggleSchema, contactSchema, crmEntityIdSchema } from "@/lib/validation";
 
 export type SaveResult =
   | { ok: true; id: string }
@@ -21,6 +22,13 @@ function firstErrors(fieldErrors: Record<string, string[] | undefined>): Record<
 export async function saveContact(id: string | null, formData: FormData): Promise<SaveResult> {
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "Unauthorized" };
+  if (!canManageDirectory(user)) return { ok: false, error: "Forbidden" };
+
+  if (id) {
+    const parsedId = crmEntityIdSchema.safeParse(id);
+    if (!parsedId.success) return { ok: false, error: parsedId.error.issues[0]?.message ?? "Invalid contact id" };
+    id = parsedId.data;
+  }
 
   const parsed = contactSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -66,6 +74,12 @@ export type ToggleResult = { ok: true; enabled: boolean } | { ok: false; error: 
 export async function setContactAutoReply(id: string, enabled: boolean): Promise<ToggleResult> {
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "Unauthorized" };
+  if (!canManageDirectory(user)) return { ok: false, error: "Forbidden" };
+
+  const parsed = autoReplyToggleSchema.safeParse({ id, enabled });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid auto-reply update" };
+  id = parsed.data.id;
+  enabled = parsed.data.enabled;
 
   try {
     await prisma.contact.update({ where: { id }, data: { autoReplyEnabled: enabled } });

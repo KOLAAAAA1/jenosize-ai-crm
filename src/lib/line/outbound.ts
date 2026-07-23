@@ -93,6 +93,7 @@ export async function approveAndSendLineDraft(
   });
 
   if (!message) return { ok: false, error: "Message not found" };
+  if (message.channel !== "LINE") return { ok: false, leadId: message.leadId ?? undefined, messageId, error: "Message is not a LINE message" };
   if (message.direction !== "OUT") return { ok: false, leadId: message.leadId ?? undefined, messageId, error: "Only outbound messages can be sent" };
   if (message.status === "SENT" && message.providerMessageId) {
     return {

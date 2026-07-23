@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { canManageDirectory } from "@/lib/access-control";
 import { STAGE_META, contactName } from "@/lib/crm";
 import { formatTHB } from "@/lib/format";
 import { ContactForm } from "../contact-form";
@@ -11,6 +13,8 @@ import { AutoReplyToggle } from "./auto-reply-toggle";
 // contact's leads are shown alongside the form for context.
 export default async function ContactEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = await requireUser();
+  if (!canManageDirectory(user)) notFound();
 
   const [contact, companies] = await Promise.all([
     prisma.contact.findUnique({

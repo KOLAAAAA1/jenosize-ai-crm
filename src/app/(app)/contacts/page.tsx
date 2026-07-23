@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { canManageDirectory } from "@/lib/access-control";
 import { buildContactWhere } from "@/lib/contacts-query";
 import { CONSENT_META, contactName } from "@/lib/crm";
 import { ContactsFilters } from "./contacts-filters";
@@ -13,6 +16,8 @@ function str(v: string | string[] | undefined): string | undefined {
 }
 
 export default async function ContactsPage({ searchParams }: { searchParams: SearchParams }) {
+  const user = await requireUser();
+  if (!canManageDirectory(user)) notFound();
   const sp = await searchParams;
   const q = str(sp.q)?.trim() ?? "";
   const companyId = str(sp.company) || undefined;

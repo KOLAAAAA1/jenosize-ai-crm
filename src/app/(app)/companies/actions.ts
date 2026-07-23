@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
-import { companySchema } from "@/lib/validation";
+import { canManageDirectory } from "@/lib/access-control";
+import { companySchema, crmEntityIdSchema } from "@/lib/validation";
 
 export type SaveResult =
   | { ok: true; id: string }
@@ -20,6 +21,13 @@ function firstErrors(fieldErrors: Record<string, string[] | undefined>): Record<
 export async function saveCompany(id: string | null, formData: FormData): Promise<SaveResult> {
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "Unauthorized" };
+  if (!canManageDirectory(user)) return { ok: false, error: "Forbidden" };
+
+  if (id) {
+    const parsedId = crmEntityIdSchema.safeParse(id);
+    if (!parsedId.success) return { ok: false, error: parsedId.error.issues[0]?.message ?? "Invalid company id" };
+    id = parsedId.data;
+  }
 
   const parsed = companySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {

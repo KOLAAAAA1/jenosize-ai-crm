@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { leadScopeFor } from "@/lib/access-control";
 import { contactName } from "@/lib/crm";
 import type { BoardLead } from "@/lib/pipeline";
 import { PipelineBoard } from "./pipeline-board";
@@ -9,7 +11,9 @@ import { PipelineBoard } from "./pipeline-board";
 const BOARD_LIMIT = 500;
 
 export default async function BoardPage() {
+  const user = await requireUser();
   const rows = await prisma.lead.findMany({
+    where: leadScopeFor(user),
     orderBy: { updatedAt: "desc" },
     take: BOARD_LIMIT,
     select: {

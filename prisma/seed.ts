@@ -214,6 +214,13 @@ async function main() {
     const owner = pick(salesUsers);
     const stage = stageBag[i % stageBag.length];
     const scored = stage !== Stage.NEW;
+    const probability = stage === Stage.WON
+      ? 100
+      : stage === Stage.LOST
+        ? 0
+        : stage === Stage.NEW
+          ? null
+          : faker.number.int({ min: 35, max: 90 });
     const createdAt = dateBetween(contact.createdAt, NOW);
     const leadId = id('led', i);
     contactToLead.set(contact.id, leadId);
@@ -226,6 +233,10 @@ async function main() {
       stage,
       source: pick(sourceBag),
       valueTHB: faker.number.int({ min: 50_000, max: 2_000_000 }),
+      probability,
+      expectedCloseAt: stage === Stage.NEW || stage === Stage.WON || stage === Stage.LOST
+        ? null
+        : faker.date.between({ from: NOW, to: new Date('2026-12-31T00:00:00Z') }),
       score: scored ? faker.number.int({ min: 40, max: 95 }) : null,
       scoreReason: scored
         ? faker.helpers.arrayElement([

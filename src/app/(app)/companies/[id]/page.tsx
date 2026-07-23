@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { canManageDirectory } from "@/lib/access-control";
 import { CONSENT_META, SOURCE_META, STAGE_META, contactName } from "@/lib/crm";
 import { formatTHB, formatDate } from "@/lib/format";
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const user = await requireUser();
+  if (!canManageDirectory(user)) notFound();
 
   const company = await prisma.company.findUnique({
     where: { id },
