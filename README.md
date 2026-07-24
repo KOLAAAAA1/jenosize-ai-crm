@@ -2,6 +2,9 @@
 
 Internal AI CRM for a 20-person commercial team — a responsive CRM website, persistent database, a reusable `crm-copilot` AI skill, and LINE OA integration. Built as one coherent vertical slice.
 
+> **Live demo:** [jenosize-ai-crm.vercel.app](https://jenosize-ai-crm.vercel.app) — sign in with `admin@jenosize.demo` / `Demo1234!`
+> **Walkthrough video (3–5 min):** [Google Drive folder](https://drive.google.com/drive/folders/1EXAd95dT9jTCLLgiPqTqUx6pe_ZmMQVz?usp=sharing)
+
 > **Status:** work in progress. See [`docs/PLAN.md`](docs/PLAN.md) for the full implementation plan, scope per part, and trade-offs.
 
 ---
