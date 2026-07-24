@@ -97,6 +97,18 @@ export const liffRegisterSchema = z.object({
 });
 export type LiffRegisterFormInput = z.infer<typeof liffRegisterSchema>;
 
+// LIFF account-link request (PLAN §11.9): the verified LINE ID token + the signed
+// contact-link token from the officer's URL + a one-tap PDPA confirm.
+export const liffConnectSchema = z.object({
+  idToken: z.string().trim().min(1, "Missing LINE identity token"),
+  token: z.string().trim().min(1, "Missing connect link token"),
+  consent: z.boolean().default(false),
+});
+export type LiffConnectInput = z.infer<typeof liffConnectSchema>;
+
+// LIFF status probe: is this verified LINE user already a linked contact?
+export const liffStatusSchema = z.object({ idToken: z.string().trim().min(1, "Missing LINE identity token") });
+
 // Follow-up task on a lead (PLAN §11.2). `dueAt` is an optional yyyy-mm-dd string
 // from a date input; the action converts it to a Date.
 export const taskSchema = z.object({

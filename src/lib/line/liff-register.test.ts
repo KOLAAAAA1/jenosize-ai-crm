@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { prisma } from "@/lib/db";
-import { registerLiffContact, SELF_REGISTERED_COMPANY } from "./liff-register";
+import { registerLiffContact, findLiffContact, SELF_REGISTERED_COMPANY } from "./liff-register";
 import { verifyLiffIdToken, loginChannelId } from "./liff-verify";
 
 const TEST_USER_ID = "Utest_liff_reg_000000000000000000000001";
@@ -64,6 +64,19 @@ describe("registerLiffContact", () => {
     expect(rows[0].lastName).toBe("ใจงาม");
     expect(rows[0].phone).toBe("0899999999");
     expect(rows[0].consentStatus).toBe("UNKNOWN");
+  });
+});
+
+describe("findLiffContact", () => {
+  it("returns null for an unknown LINE user, and the linked contact once registered", async (ctx) => {
+    if (!dbOk) ctx.skip();
+    expect(await findLiffContact(prisma, "Uunknown_liff_zzz_000")).toBeNull();
+
+    await registerLiffContact(prisma, { userId: TEST_USER_ID, firstName: "หา", lastName: "เจอ", email: "found@example.com", phone: null, consent: true });
+    const c = await findLiffContact(prisma, TEST_USER_ID);
+    expect(c?.firstName).toBe("หา");
+    expect(c?.email).toBe("found@example.com");
+    expect(c?.consentStatus).toBe("OPTED_IN");
   });
 });
 

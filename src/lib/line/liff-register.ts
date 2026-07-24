@@ -30,6 +30,15 @@ async function sentinelCompanyId(db: PrismaClient): Promise<string> {
   return created.id;
 }
 
+// The contact already linked to this verified LINE user, if any — so /liff can
+// greet a returning customer with their saved details instead of a blank form.
+export async function findLiffContact(db: PrismaClient, userId: string) {
+  return db.contact.findUnique({
+    where: { lineUserId: userId },
+    select: { firstName: true, lastName: true, email: true, phone: true, consentStatus: true },
+  });
+}
+
 // Create the contact on first registration, or update it on re-submit — keyed on
 // the verified `lineUserId` so a customer can only ever write their own record.
 export async function registerLiffContact(db: PrismaClient, input: LiffRegisterInput): Promise<LiffRegisterResult> {

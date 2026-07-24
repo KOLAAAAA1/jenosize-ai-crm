@@ -7,6 +7,7 @@ import { STAGE_META, contactName } from "@/lib/crm";
 import { formatTHB } from "@/lib/format";
 import { ContactForm } from "../contact-form";
 import { AutoReplyToggle } from "./auto-reply-toggle";
+import { LineConnect } from "./line-connect";
 
 // `/contacts/[id]` is the edit page (deliberate asymmetry with companies — a
 // contact is simple enough that a dedicated read-only detail adds little). The
@@ -38,6 +39,8 @@ export default async function ContactEditPage({ params }: { params: Promise<{ id
           <Link href={`/companies/${contact.company.id}`} className="hover:underline">{contact.company.name}</Link>
         </p>
       </div>
+
+      <LineConnect contactId={contact.id} lineLinked={contact.lineUserId != null} />
 
       <AutoReplyToggle
         contactId={contact.id}

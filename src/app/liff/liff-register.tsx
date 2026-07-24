@@ -2,13 +2,31 @@
 
 import { useEffect, useState } from "react";
 import { LiffRegisterForm } from "./liff-register-form";
+import { LiffLink } from "./liff-link";
 import { LiffDesktopLanding } from "./liff-desktop-landing";
 
 type Phase =
   | { kind: "loading" }
   | { kind: "desktop" } // opened outside the LINE app → hand off to phone
-  | { kind: "ready"; idToken: string; displayName: string | null } // in-LINE, verified
+  | { kind: "ready"; idToken: string; displayName: string | null; linkToken: string | null } // in-LINE, verified
   | { kind: "error"; message: string };
+
+// The connect link token must be read on the client AFTER liff.init(): when a
+// not-logged-in user hits liff.login(), LIFF stashes the original query in a
+// `liff.state` param and only restores it post-init, so a server-side
+// searchParams read would miss it. Check the plain query first, then liff.state.
+function readLinkToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const direct = params.get("token");
+  if (direct) return direct;
+  const state = params.get("liff.state");
+  if (state) {
+    const inner = new URLSearchParams(state.startsWith("?") ? state.slice(1) : state);
+    return inner.get("token");
+  }
+  return null;
+}
 
 export function LiffRegister({ liffId }: { liffId: string }) {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
@@ -40,7 +58,7 @@ export function LiffRegister({ liffId }: { liffId: string }) {
         }
         const profile = await liff.getProfile().catch(() => null);
         if (cancelled) return;
-        setPhase({ kind: "ready", idToken, displayName: profile?.displayName ?? null });
+        setPhase({ kind: "ready", idToken, displayName: profile?.displayName ?? null, linkToken: readLinkToken() });
       } catch (err) {
         if (cancelled) return;
         setPhase({ kind: "error", message: err instanceof Error ? err.message : "LIFF init failed" });
@@ -63,6 +81,12 @@ export function LiffRegister({ liffId }: { liffId: string }) {
         {phase.message}
       </p>
     );
+  }
+
+  // Link mode (officer-minted token in the URL) vs register/update (the form
+  // greets an already-linked user with their saved details, else a blank form).
+  if (phase.linkToken) {
+    return <LiffLink idToken={phase.idToken} token={phase.linkToken} displayName={phase.displayName} />;
   }
   return <LiffRegisterForm idToken={phase.idToken} displayName={phase.displayName} />;
 }

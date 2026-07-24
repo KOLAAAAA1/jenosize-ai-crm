@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { canManageDirectory } from "@/lib/access-control";
 import { autoReplyToggleSchema, contactSchema, crmEntityIdSchema } from "@/lib/validation";
+import { signContactLinkToken } from "@/lib/line/link-token";
 
 export type SaveResult =
   | { ok: true; id: string }
@@ -89,4 +90,27 @@ export async function setContactAutoReply(id: string, enabled: boolean): Promise
 
   revalidatePath(`/contacts/${id}`);
   return { ok: true, enabled };
+}
+
+export type ConnectLinkResult = { ok: true; url: string } | { ok: false; error: string };
+
+// PLAN §11.9: mint a short-lived signed connect link an officer sends to a
+// customer. Opening it in LINE binds the customer's verified LINE identity to
+// THIS contact (contactId is baked into the signed token, never a plain param).
+export async function createContactLineConnectLink(id: string): Promise<ConnectLinkResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Unauthorized" };
+  if (!canManageDirectory(user)) return { ok: false, error: "Forbidden" };
+
+  const parsed = crmEntityIdSchema.safeParse(id);
+  if (!parsed.success) return { ok: false, error: "Invalid contact id" };
+
+  const liffId = process.env.LINE_LIFF_ID?.trim();
+  if (!liffId) return { ok: false, error: "LIFF is not configured (missing LINE_LIFF_ID)." };
+
+  const contact = await prisma.contact.findUnique({ where: { id: parsed.data }, select: { id: true } });
+  if (!contact) return { ok: false, error: "Contact not found." };
+
+  const token = await signContactLinkToken(contact.id);
+  return { ok: true, url: `https://liff.line.me/${liffId}?token=${encodeURIComponent(token)}` };
 }

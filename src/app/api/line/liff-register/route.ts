@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { liffRegisterSchema } from "@/lib/validation";
 import { verifyLiffIdToken, loginChannelId } from "@/lib/line/liff-verify";
 import { registerLiffContact } from "@/lib/line/liff-register";
+import { switchToMemberRichMenu } from "@/lib/line/richmenu";
 import { logger } from "@/lib/logger";
 
 // Public (no CRM session): customers reach this from the LIFF page. Security is the
@@ -38,6 +39,9 @@ export async function POST(req: Request) {
     phone: parsed.data.phone ?? null,
     consent: parsed.data.consent,
   });
+
+  // Now connected → swap this user onto the member rich menu (best-effort).
+  await switchToMemberRichMenu(identity.userId);
 
   logger.info("line.liff.registered", { created: result.created });
   return NextResponse.json({ ok: true, created: result.created });
