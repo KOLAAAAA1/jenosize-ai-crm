@@ -9,7 +9,6 @@ import { StageMover } from "./stage-mover";
 import { CopilotPanel, type PendingSuggestion } from "./copilot-panel";
 import { LineDraftsPanel, type PendingLineDraft } from "./line-drafts-panel";
 import { LineCompose } from "./line-compose";
-import { EmailPanel, type PendingEmailDraft } from "./email-panel";
 import { ChatHistory, type ChatMessage } from "./chat-history";
 import { TasksPanel, type LeadTask } from "./tasks-panel";
 import { DealFieldsPanel } from "./deal-fields-panel";
@@ -64,15 +63,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     .filter((m) => m.channel === "LINE" && m.direction === "OUT" && (m.status === "DRAFT" || m.status === "FAILED"))
     .map((m) => ({ id: m.id, body: m.body, status: m.status as "DRAFT" | "FAILED" }));
 
-  const pendingEmailDrafts: PendingEmailDraft[] = lead.messages
-    .filter((m) => m.channel === "EMAIL" && m.direction === "OUT" && (m.status === "DRAFT" || m.status === "FAILED"))
-    .map((m) => ({
-      id: m.id,
-      subject: m.subject ?? "(No subject)",
-      body: m.body,
-      status: m.status as "DRAFT" | "FAILED",
-      toAddress: m.toAddress,
-    }));
 
   const leadTasks: LeadTask[] = lead.tasks.map((t) => ({
     id: t.id,
@@ -187,7 +177,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <LineDraftsPanel drafts={pendingLineDrafts} />
           </div>
 
-          <EmailPanel leadId={lead.id} drafts={pendingEmailDrafts} />
+          {/* Email compose/send is a deferred enhancement (see docs/BACKLOG.md);
+              the panel is hidden from the lead detail. Backend seam stays intact. */}
 
           <div className="mt-4">
             <TasksPanel leadId={lead.id} tasks={leadTasks} />
