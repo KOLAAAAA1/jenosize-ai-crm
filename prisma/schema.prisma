@@ -99,6 +99,12 @@ enum TaskStatus {
   DONE
 }
 
+// Lightweight conversation-state marker for the LINE inquiry→lead capture flow
+// (PLAN §5 / src/lib/line/inbound-intents.ts). One value for now.
+enum PendingIntent {
+  AWAITING_INQUIRY
+}
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -143,6 +149,9 @@ model Contact {
   // page). Default false = OA never auto-replies to this customer. Separate from
   // the AI copilot, which is unaffected. See src/lib/line/autoreply.ts.
   autoReplyEnabled Boolean @default(false)
+  // Set when the customer taps "ask for more info" on the rich menu; their next
+  // message is captured into a Lead and this is cleared (PLAN §5).
+  pendingIntent PendingIntent?
   createdAt  DateTime @default(now())
 
   company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)

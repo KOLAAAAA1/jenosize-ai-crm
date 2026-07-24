@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { recordInvalidLineWebhook, processLineWebhook } from "@/lib/line/service";
 import { autoReplyToWebhook } from "@/lib/line/autoreply";
 import { processFollowLifecycle } from "@/lib/line/follow";
+import { handleInboundIntents } from "@/lib/line/inbound-intents";
 import { verifyLineSignature } from "@/lib/line/signature";
 import { logger } from "@/lib/logger";
 
@@ -42,6 +43,10 @@ export async function POST(req: Request) {
   // Friend-add / block lifecycle: welcome new followers with the LIFF link,
   // opt-out contacts who blocked the OA. Best-effort (never throws).
   await processFollowLifecycle(prisma, rawBody);
+
+  // Rich-menu keyword automation & inquiry→lead capture (PLAN §5). Best-effort;
+  // idempotent side effects (atomic pendingIntent claim) live in the module.
+  await handleInboundIntents(prisma, rawBody);
 
   if (result.status === "invalid") {
     logger.warn("line.webhook.invalid_payload", { error: result.error });
