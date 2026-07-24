@@ -133,6 +133,40 @@ runtime uses the pooled endpoint (connection-exhaustion under load).
 
 ---
 
+## Deploy to Vercel
+
+The app deploys to Vercel; the database is Neon (above). The build command
+(`prisma generate && next build`) is defined in `package.json`.
+
+**One-time setup** (skip `npm i -g vercel` if you use `npx vercel`):
+
+```bash
+npm i -g vercel
+vercel login
+vercel link          # link this folder to the Vercel project
+```
+
+Set the production env vars in the Vercel dashboard, mirroring
+[`.env.example`](.env.example): `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`,
+`ANTHROPIC_API_KEY`, and the `LINE_*` vars.
+
+**Deploy — order matters: migrate the database before shipping code that reads it.**
+
+```bash
+# 1. Apply pending migrations to prod Neon (uses DIRECT_URL)
+export DATABASE_URL="<pooled>" DIRECT_URL="<direct>"
+pnpm exec prisma migrate deploy
+
+# 2. Deploy to production (builds from the local tree; aliases the prod domain)
+vercel --prod        # or: npx vercel --prod
+```
+
+`vercel --prod` builds from your **local working tree**, so commit first for a
+reproducible deploy. A preview (non-production) deploy is just `vercel`. After it
+finishes, verify with the [smoke test](#deploy-smoke-test).
+
+---
+
 ## LINE OA integration
 
 Webhook endpoint:
