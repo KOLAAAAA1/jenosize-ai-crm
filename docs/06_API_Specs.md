@@ -29,6 +29,8 @@ All handlers run on the Node runtime (Prisma) and validate input with Zod. Bodie
 | `POST` | `/api/line/liff-register` | **LIFF ID token** | Body `{ idToken, firstName, lastName, email?, phone?, consent }`. Server-side verifies the ID token (trusts only `sub`), upserts a Contact on `lineUserId` under the sentinel company. 401 on unverifiable token; 400 on invalid form. |
 | `POST` | `/api/line/liff-connect` | **LIFF ID token + signed link token** | Body `{ idToken, token, consent }`. Verifies both tokens, binds the verified `lineUserId` to the `contactId` inside the signed token. Returns `{ ok, outcome: "linked"|"already_linked"|"relinked_from_sentinel" }`, or 401 (bad/expired token), 404 (contact gone), 409 (LINE user linked elsewhere / contact already linked to a different user). |
 
+> ✅ **Also handled (no new endpoint):** `/api/line/webhook` handles rich-menu keyword messages — auto-acknowledge "ขอติดต่อทีมงาน", and the "ขอสอบถามข้อมูลเพิ่มเติม" → inquiry → **lead capture** flow (via a `Contact.pendingIntent` state marker), all within the existing verify → map → persist → reply pipeline (`src/lib/line/inbound-intents.ts`). See [02_FSD §3.5](02_FSD.md) · [PLAN §5](PLAN.md).
+
 ### Email
 | Method | Path | Auth | Purpose |
 |---|---|---|---|

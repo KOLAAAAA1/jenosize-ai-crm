@@ -2,7 +2,7 @@
 
 How each feature behaves — business logic, workflows, and scope guardrails. Product intent → [01_PRD](01_PRD.md); system design → [03_Architecture](03_Architecture.md); schema → [04_Database](04_Database.md); endpoints → [06_API_Specs](06_API_Specs.md).
 
-**Legend:** ✅ shipped · ◐ partial · 🔮 deferred to a future enhancement.
+**Legend:** ✅ shipped · ◐ partial · 🗓 planned (scoped for next iteration) · 🔮 deferred to a future enhancement.
 
 ---
 
@@ -25,7 +25,7 @@ How each feature behaves — business logic, workflows, and scope guardrails. Pr
 ## 3. LINE OA integration (✅)
 
 - **Inbound webhook** (`POST /api/line/webhook`): verify `X-Line-Signature` (HMAC-SHA256) against the **raw body before parse**; reject mismatch (401) with a `WebhookEvent` audit row. Idempotent on `webhookEventId` / `providerMessageId`. Maps the LINE user → Contact/Lead, persists an inbound `Message(RECEIVED)` + a `LINE_IN` Activity. Unmapped users are recorded for backfill.
-- **Outbound** = **approval-based draft** (`DRAFT → APPROVED → SENT|FAILED`). Mock adapter for local tests/dev; real push adapter with `X-Line-Retry-Key` when `LINE_ENABLED=true`. No secrets committed.
+- **Outbound** = **approval-based draft** (`DRAFT → APPROVED → SENT|FAILED`). A draft comes from an AI suggestion **or** a **manual composer** on the lead detail (a rep types a reply → `Message(DRAFT)`) — both feed the identical approve→send path, so sending works even when the AI is on the deterministic fallback (which produces no draft). Mock adapter for local tests/dev; real push adapter with `X-Line-Retry-Key` when `LINE_ENABLED=true`. No secrets committed.
 - **Retry/idempotency + best-effort:** provider re-delivery can't double-send or double-persist; a reply failure never turns the 200 into a 500 (which would trigger LINE retries).
 
 ### 3.1 LIFF self-registration (✅ §11.4-origin)
@@ -49,6 +49,26 @@ A narrow, opt-in exception to the receive-only design: the OA sends a **canned g
 ### 3.4 Chat-history view (✅ §11.6-origin)
 
 Read-only chat-thread rendering of the persisted LINE `Message` rows on the lead detail (`chat-history.tsx`) — customer-left / sales-right bubbles, status pills, timestamps, framed as **handover evidence** so a rep taking over reads the full conversation. No schema change (reuses existing rows). **Known limitation:** outbound bubbles are labeled with the lead's *current* owner (no per-message `senderUserId`); content is preserved, true-sender-across-owner-change is deferred.
+
+### 3.5 LINE inbound keyword automation & lead capture (✅ shipped)
+
+> **Shipped:** `src/lib/line/inbound-intents.ts` (+ `inbound-intents.test.ts`), wired into the webhook route after the other best-effort reply modules; migration `add_contact_pending_intent` adds `Contact.pendingIntent` (enum `PendingIntent = AWAITING_INQUIRY`). Default lead owner via `LINE_LEAD_DEFAULT_OWNER_ID` (else earliest ADMIN/MANAGER).
+
+The rich-menu message buttons ("ขอติดต่อทีมงาน", "ขอสอบถามข้อมูลเพิ่มเติม") previously only logged an inbound `Message`; they are now actionable. All handlers slot into the existing webhook after signature-verify + mapping + persistence, and reply via the reply API (`replyToken`), so they inherit idempotency (`webhookEventId`) and the **mock adapter** used in tests. Every reply is **best-effort** — a failure never turns the webhook's 200 into a 500.
+
+**A · "ขอติดต่อทีมงาน" → auto-acknowledge.** On this exact keyword, send a **fixed** reply ("รับเรื่องแล้ว ทีมงานจะติดต่อกลับโดยเร็ว") — never AI. Then log a follow-up signal on the mapped lead (an `Activity`, or optionally an OPEN `Task`) so a rep sees the request. Unlike the greeting auto-reply (§3.3), this is **not** gated by `Contact.autoReplyEnabled`: it's a direct customer request, so acknowledging is consent-safe.
+
+**B · "ขอสอบถามข้อมูลเพิ่มเติม" → inquiry → lead.** A minimal two-step capture without a full chatbot:
+1. On the keyword, reply asking for details (สินค้า/บริการที่สนใจ · ความต้องการ · งบประมาณ) and set `Contact.pendingIntent = AWAITING_INQUIRY` (a lightweight state marker — see [04_Database](04_Database.md)).
+2. The customer's **next** inbound message (while `pendingIntent = AWAITING_INQUIRY`) is treated as the inquiry: **create a Lead** (`source LINE_OA`, `stage NEW`, title/first `Activity` from the text) for the mapped contact, clear `pendingIntent`, and reply a confirmation ("ได้รับข้อมูลแล้ว ทีมขายจะติดต่อกลับ"). A salesperson then qualifies the new lead in the pipeline.
+
+*Owner assignment:* `Lead.ownerId` is required (`onDelete: Restrict`), so a captured lead needs a default owner (config, or a manager) until the P1 auto-routing rule exists — do **not** invent round-robin here. *Alternative considered:* instead of auto-creating the lead, create an approval-based `Message(DRAFT)`/suggestion for a rep to confirm — chosen against for MVP because lead capture from a genuine inquiry is standard CRM behavior; the human still qualifies at `stage NEW`.
+
+**C · Safe mapping / persistence / reply (guardrail for A & B).** Both handlers must: map the LINE user → Contact (create-if-unknown per §3.1, so an unfollowed/unregistered sender still gets a record), persist the inbound `Message` + `WebhookEvent` idempotently, and respond via the reply API **or** an approval-based draft where a human should confirm. Each path is unit-tested with the **mock adapter** — no live LINE calls. This case exists so A and B can't quietly bypass the shipped webhook/outbound safety (signature verify, idempotency, human-approval for outbound).
+
+**Known limitations (accepted, not engineered around):** while `AWAITING_INQUIRY`, *any* next text becomes the lead — including a one-word greeting (→ a thin lead a rep can discard); non-text events (stickers/images) are naturally ignored since only text messages are parsed. If a contact also has `autoReplyEnabled` and sends a greeting *while* awaiting, the greeting auto-reply (§3.3) and this capture both target the same single-use `replyToken` — one will `400` (harmless, best-effort). Captured leads take a default owner until the P1 auto-routing rule exists.
+
+**Scope guardrails (not built):** free-text NLU / general chatbot, multi-turn qualification forms, AI scoring of captured leads, and automatic lead assignment.
 
 ## 4. Tasks & follow-up reminders (✅ §11.2-origin)
 

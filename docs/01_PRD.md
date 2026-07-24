@@ -42,7 +42,7 @@
 
 ## 2. Feature landscape (product scope map)
 
-**Legend:** ✅ built · ◐ partial · ➕ not yet built · 🔮 deferred to a future enhancement (groundwork may exist, feature not delivered).
+**Legend:** ✅ built · ◐ partial · ➕ not yet built · 🗓 planned (scoped for next iteration) · 🔮 deferred to a future enhancement (groundwork may exist, feature not delivered).
 
 **Contact & Account Management** — ✅ unified contact/company profiles · ✅ company↔contact↔lead relationships · ✅ consent/PDPA (`consentStatus`) · ➕ dedup/merge · ➕ enrichment · ➕ segmentation.
 
@@ -50,7 +50,7 @@
 
 **Activity, Tasks & Timeline** — ✅ unified activity timeline · ✅ audit trail · ✅ tasks & follow-up reminders · ➕ calendar/email 2-way sync.
 
-**Communication / Omnichannel** — ✅ LINE inbound + approval-based outbound · ✅ chat-history view · ✅ per-contact greeting auto-reply · ✅ LIFF self-registration + account linking · 🔮 email integration (draft editor + attachments) · ➕ templates · ➕ sequences · ➕ VoIP/SMS · ➕ shared inbox.
+**Communication / Omnichannel** — ✅ LINE inbound + approval-based outbound · ✅ chat-history view · ✅ per-contact greeting auto-reply · ✅ LIFF self-registration + account linking · ✅ LINE inbound keyword automation + inquiry→lead capture ([PLAN §5](PLAN.md)) · 🔮 email integration (draft editor + attachments) · ➕ templates · ➕ sequences · ➕ VoIP/SMS · ➕ shared inbox.
 
 **AI / Automation** — ✅ summary + qualification score/reasons + next action · ✅ AI draft LINE reply (separated from sends) · ✅ deterministic fallback · ➕ workflow automation · ➕ sentiment · ➕ predictive forecasting.
 

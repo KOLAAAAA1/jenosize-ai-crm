@@ -12,7 +12,9 @@ Company         id, name, industry, size, website, notes, createdAt
 Contact         id, companyId→Company, firstName, lastName, email, phone, title,
                 lineUserId(unique, nullable),        # LINE→CRM mapping key
                 consentStatus(ConsentStatus, default UNKNOWN),
-                autoReplyEnabled(bool, default false), createdAt
+                autoReplyEnabled(bool, default false),
+                pendingIntent(PendingIntent?),       # LINE inquiry→lead capture state
+                createdAt
 Lead            id, title, companyId→Company, contactId→Contact, ownerId→User,
                 stage(Stage), source(Source), valueTHB, score(int?), scoreReason(text?),
                 probability(int?), expectedCloseAt(DateTime?),   # deal fields (P1)
@@ -33,7 +35,11 @@ WebhookEvent    id, provider, providerEventId(unique), signatureValid(bool),
                 rawPayload(json), status(WebhookStatus), processedAt   # dedupe + audit
 ```
 
-> The model count grew from the original 8 (Task was added for follow-up reminders, and `Contact`/`Lead`/`Message` gained consent, auto-reply, deal, and email fields). A future `EmailAttachment` model is planned for the deferred email editor ([02_FSD §7](02_FSD.md)).
+> The model count grew from the original 8 (Task was added for follow-up reminders, and `Contact`/`Lead`/`Message` gained consent, auto-reply, deal, email, and `pendingIntent` fields).
+>
+> `Contact.pendingIntent` (nullable enum `PendingIntent = AWAITING_INQUIRY`; migration `add_contact_pending_intent`) is a lightweight one-column conversation-state marker for the LINE inquiry→lead capture flow ([02_FSD §3.5](02_FSD.md) · [PLAN §5](PLAN.md)): set when the customer taps "ask for more info", read to capture their next message into a lead, then cleared. Deliberately a single column, not a conversation-state table.
+>
+> **Planned schema addition:** an `EmailAttachment` model for the deferred email editor ([02_FSD §7](02_FSD.md)).
 
 ---
 
@@ -51,6 +57,7 @@ WebhookEvent    id, provider, providerEventId(unique), signatureValid(bool),
 - `WebhookStatus = RECEIVED | PROCESSED | DUPLICATE | INVALID | FAILED`
 - `ConsentStatus = UNKNOWN | OPTED_IN | OPTED_OUT`
 - `TaskStatus = OPEN | DONE`
+- `PendingIntent = AWAITING_INQUIRY`
 
 ---
 
