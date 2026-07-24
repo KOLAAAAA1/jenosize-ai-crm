@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { saveLeadDealFields } from "../actions";
+import { parseThaiBudget } from "@/lib/thai-budget";
+import { formatTHB } from "@/lib/format";
 
 function dateValue(value: string | null): string {
   return value ? value.slice(0, 10) : "";
@@ -9,23 +11,35 @@ function dateValue(value: string | null): string {
 
 export function DealFieldsPanel({
   leadId,
+  valueTHB,
   probability,
   expectedCloseAt,
 }: {
   leadId: string;
+  valueTHB: number;
   probability: number | null;
   expectedCloseAt: string | null;
 }) {
+  const [valueInput, setValueInput] = useState(valueTHB ? String(valueTHB) : "");
   const [probabilityValue, setProbabilityValue] = useState(probability?.toString() ?? "");
   const [closeDate, setCloseDate] = useState(dateValue(expectedCloseAt));
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
+  // Live preview: accepts plain digits or Thai text ("1 ล้านบาท", "5 แสน", "500k").
+  const trimmedValue = valueInput.trim();
+  const parsedValue = trimmedValue === "" ? 0 : parseThaiBudget(trimmedValue);
+
   function save() {
+    if (parsedValue === null) {
+      setMessage("จำนวนเงินไม่ถูกต้อง (เช่น 1000000 หรือ 1 ล้านบาท)");
+      return;
+    }
     const parsedProbability = probabilityValue.trim() === "" ? null : Number(probabilityValue);
     setMessage(null);
     startTransition(async () => {
       const result = await saveLeadDealFields(leadId, {
+        valueTHB: parsedValue,
         probability: Number.isFinite(parsedProbability) ? parsedProbability : Number.NaN,
         expectedCloseAt: closeDate || null,
       });
@@ -40,6 +54,25 @@ export function DealFieldsPanel({
     <section className="mt-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Deal details</h2>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 sm:col-span-2">
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Value / budget (THB)</span>
+          <input
+            aria-label="Deal value in THB"
+            type="text"
+            inputMode="text"
+            value={valueInput}
+            onChange={(event) => setValueInput(event.target.value)}
+            placeholder="เช่น 1000000 หรือ 1 ล้านบาท"
+            className={fieldClass}
+          />
+          {trimmedValue !== "" && (
+            parsedValue === null ? (
+              <span className="text-xs text-amber-600 dark:text-amber-400">ไม่เข้าใจจำนวน — พิมพ์ตัวเลข หรือเช่น 1 ล้านบาท / 5 แสน</span>
+            ) : (
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">= {formatTHB(parsedValue)}</span>
+            )
+          )}
+        </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Win probability</span>
           <div className="relative">

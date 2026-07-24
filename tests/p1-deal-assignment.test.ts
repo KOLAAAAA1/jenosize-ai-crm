@@ -47,22 +47,23 @@ afterAll(async () => {
 });
 
 describe("P1 deal fields and manual assignment", () => {
-  it("records a probability/close-date change in the immutable timeline", async (ctx) => {
+  it("records a value/probability/close-date change in the immutable timeline", async (ctx) => {
     if (!dbOk) ctx.skip();
     const expectedCloseAt = new Date("2026-09-30T00:00:00.000Z");
     await expect(updateLeadDealFields(prisma, {
       leadId: ids.lead,
       userId: ids.sales,
+      valueTHB: 1_000_000,
       probability: 65,
       expectedCloseAt,
     })).resolves.toEqual({ ok: true, changed: true });
 
-    await expect(prisma.lead.findUniqueOrThrow({ where: { id: ids.lead } })).resolves.toMatchObject({ probability: 65, expectedCloseAt });
+    await expect(prisma.lead.findUniqueOrThrow({ where: { id: ids.lead } })).resolves.toMatchObject({ valueTHB: 1_000_000, probability: 65, expectedCloseAt });
     const activity = await prisma.activity.findFirstOrThrow({
       where: { leadId: ids.lead, body: "Deal details updated." },
       orderBy: { createdAt: "desc" },
     });
-    expect(activity.metadata).toMatchObject({ kind: "DEAL_FIELDS_UPDATED", to: { probability: 65 } });
+    expect(activity.metadata).toMatchObject({ kind: "DEAL_FIELDS_UPDATED", to: { valueTHB: 1_000_000, probability: 65 } });
   });
 
   it("moves ownership only to an assignable manager or sales user and logs it", async (ctx) => {

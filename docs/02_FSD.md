@@ -11,7 +11,7 @@ How each feature behaves — business logic, workflows, and scope guardrails. Pr
 - **Auth & access:** login page + seeded demo creds (thin `jose` session cookie). Role enforcement (`src/lib/access-control.ts`): admin/manager see the shared lead queue + directory; sales are scoped to owned leads/tasks. Server pages, server actions, and `/api/ai/copilot` all re-check the session.
 - **Directory:** Leads, Companies, Contacts list pages with **search + filter + pagination** and Zod-validated create/edit. Companies/Contacts keep minimal CRUD; **Leads carry the depth**.
 - **Pipeline board:** native drag/drop (`useOptimistic` + HTML5 DnD) plus a lead-detail stage mover; both route through one atomic stage-move service that writes a `STAGE_CHANGE` Activity. (Native DnD is desktop/mouse only; touch users use the lead-detail mover.)
-- **Lead detail + timeline:** profile + a unified chronological **timeline** merging activities and messages. Deal fields (probability %, expected close date) are editable with an immutable audit Activity on meaningful edits.
+- **Lead detail + timeline:** profile + a unified chronological **timeline** merging activities and messages. Deal fields (**value/budget in THB**, probability %, expected close date) are editable with an immutable audit Activity on meaningful edits. The value field accepts plain digits **or Thai budget text** ("1 ล้านบาท", "5 แสน", "500k") via `parseThaiBudget`, with a live formatted preview — so an officer can transcribe a customer's LINE-messaged budget directly.
 
 ## 2. AI Copilot & deterministic fallback (✅)
 

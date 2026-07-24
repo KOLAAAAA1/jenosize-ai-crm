@@ -170,6 +170,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
           <DealFieldsPanel
             leadId={lead.id}
+            valueTHB={lead.valueTHB}
             probability={lead.probability}
             expectedCloseAt={lead.expectedCloseAt?.toISOString() ?? null}
           />

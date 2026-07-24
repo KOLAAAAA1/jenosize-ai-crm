@@ -49,24 +49,26 @@ export async function updateLeadDealFields(
   args: {
     leadId: string;
     userId: string;
+    valueTHB: number;
     probability: number | null;
     expectedCloseAt: Date | null;
   },
 ): Promise<DealFieldsResult> {
   const lead = await db.lead.findUnique({
     where: { id: args.leadId },
-    select: { probability: true, expectedCloseAt: true },
+    select: { valueTHB: true, probability: true, expectedCloseAt: true },
   });
   if (!lead) return { ok: false, error: "Lead not found" };
 
+  const sameValue = lead.valueTHB === args.valueTHB;
   const sameProbability = lead.probability === args.probability;
   const sameDate = lead.expectedCloseAt?.getTime() === args.expectedCloseAt?.getTime();
-  if (sameProbability && sameDate) return { ok: true, changed: false };
+  if (sameValue && sameProbability && sameDate) return { ok: true, changed: false };
 
   await db.$transaction([
     db.lead.update({
       where: { id: args.leadId },
-      data: { probability: args.probability, expectedCloseAt: args.expectedCloseAt },
+      data: { valueTHB: args.valueTHB, probability: args.probability, expectedCloseAt: args.expectedCloseAt },
     }),
     db.activity.create({
       data: {
@@ -77,10 +79,12 @@ export async function updateLeadDealFields(
         metadata: {
           kind: "DEAL_FIELDS_UPDATED",
           from: {
+            valueTHB: lead.valueTHB,
             probability: lead.probability,
             expectedCloseAt: lead.expectedCloseAt?.toISOString() ?? null,
           },
           to: {
+            valueTHB: args.valueTHB,
             probability: args.probability,
             expectedCloseAt: args.expectedCloseAt?.toISOString() ?? null,
           },

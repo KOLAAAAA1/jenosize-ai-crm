@@ -267,7 +267,7 @@ export async function changeLeadOwner(leadId: string, ownerId: string): Promise<
 // surface. Both managers and the assigned sales rep may keep them current.
 export async function saveLeadDealFields(
   leadId: string,
-  input: { probability: number | null; expectedCloseAt: string | null },
+  input: { valueTHB: number; probability: number | null; expectedCloseAt: string | null },
 ): Promise<TaskActionResult> {
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "Unauthorized" };
@@ -286,6 +286,7 @@ export async function saveLeadDealFields(
   const res = await updateLeadDealFields(prisma, {
     leadId,
     userId: user.id,
+    valueTHB: parsed.data.valueTHB,
     probability: parsed.data.probability,
     expectedCloseAt,
   });

@@ -128,6 +128,7 @@ export type TaskInput = z.infer<typeof taskSchema>;
 // P1 deal fields. Null explicitly means "not decided yet" so early-stage
 // opportunities are not forced into false precision.
 export const dealFieldsSchema = z.object({
+  valueTHB: z.number().int("Value must be a whole number").min(0, "Value must be at least 0").max(1_000_000_000, "Value is too large"),
   probability: z.number().int().min(0, "Probability must be at least 0").max(100, "Probability cannot exceed 100").nullable(),
   expectedCloseAt: z
     .string()
