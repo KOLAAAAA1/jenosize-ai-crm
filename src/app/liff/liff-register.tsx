@@ -70,7 +70,7 @@ export function LiffRegister({ liffId }: { liffId: string }) {
   }, [liffId]);
 
   if (phase.kind === "loading") {
-    return <p className="text-sm text-zinc-500 dark:text-zinc-400">กำลังเชื่อมต่อ LINE…</p>;
+    return <p className="flex items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">กำลังเชื่อมต่อ LINE…</p>;
   }
   if (phase.kind === "desktop") {
     return <LiffDesktopLanding liffUrl={`https://liff.line.me/${liffId}`} />;

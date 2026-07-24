@@ -75,7 +75,7 @@ export function LiffRegisterForm({ idToken, displayName }: { idToken: string; di
   }
 
   if (!loaded) {
-    return <p className="text-sm text-zinc-500 dark:text-zinc-400">กำลังตรวจสอบข้อมูลของคุณ…</p>;
+    return <p className="flex items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">กำลังตรวจสอบข้อมูลของคุณ…</p>;
   }
 
   const linked = loaded.linked;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "./logout-button";
@@ -62,7 +63,8 @@ export function AppHeader({ user }: { user: SessionUser }) {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
         {/* Left — brand + navigation links (desktop) */}
         <div className="flex items-center gap-6">
-          <Link href="/" className="shrink-0 text-sm font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          <Link href="/" className="flex shrink-0 items-center gap-2 text-sm font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            <Image src="/crm-handshake-growth-profile-icon.png" alt="" width={28} height={28} priority className="h-7 w-7 rounded-md object-contain" />
             AI CRM
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
@@ -117,7 +119,10 @@ export function AppHeader({ user }: { user: SessionUser }) {
             className="absolute right-0 top-0 flex h-full w-72 max-w-[80%] flex-col bg-white shadow-xl dark:bg-zinc-900"
           >
             <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-              <span className="text-sm font-bold tracking-tight text-zinc-900 dark:text-zinc-50">AI CRM</span>
+              <span className="flex items-center gap-2 text-sm font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                <Image src="/crm-handshake-growth-profile-icon.png" alt="" width={28} height={28} className="h-7 w-7 rounded-md object-contain" />
+                AI CRM
+              </span>
               <button
                 type="button"
                 onClick={() => setMenuOpen(false)}
