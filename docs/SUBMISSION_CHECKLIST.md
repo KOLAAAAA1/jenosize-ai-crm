@@ -143,7 +143,7 @@ pnpm smoke:deploy
 - [x] Source repo URL — **https://github.com/KOLAAAAA1/jenosize-ai-crm** *(private — make public or invite reviewers before submitting)*
 - [x] Deployed Vercel URL — **https://jenosize-ai-crm.vercel.app**
 - [x] Demo credentials — **`admin@jenosize.demo` / `Demo1234!`**
-- [ ] LINE OA QR code or test instructions — *from LINE Developers console (Bot basic ID `@488yhaah`); repoint webhook to the Vercel URL first*
+- [x] LINE OA QR code or test instructions — **[`docs/submissions/qr-line-official.png`](submissions/qr-line-official.png)** (Bot basic ID `@488yhaah`), embedded in `README.md` §"Add the test LINE OA (QR code)". Prod webhook confirmed at `https://jenosize-ai-crm.vercel.app/api/line/webhook` with **Use webhook** on (see [`submissions/developers.line.biz.png`](submissions/developers.line.biz.png)).
 - [x] `docs/AI_USAGE_LOG.md`
 - [ ] 3-5 minute walkthrough video using `docs/WALKTHROUGH_SCRIPT.md`
 - [ ] Convert to public visibility `gh repo edit --visibility public`

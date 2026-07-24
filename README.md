@@ -167,7 +167,91 @@ finishes, verify with the [smoke test](#deploy-smoke-test).
 
 ---
 
+## Portability — moving off Vercel + Neon
+
+The app is deliberately platform-neutral: a standard Next.js **Node.js** server plus a
+single Postgres connection string. Nothing depends on Vercel- or Neon-specific APIs, so
+another team can run it on containers/Kubernetes, EC2/VMs, or any other cloud by changing
+two things only: **a container image and environment variables** — not application code.
+
+**What makes it portable**
+
+- DB access goes through Prisma's **pg driver adapter** — any Postgres works by swapping `DATABASE_URL` / `DIRECT_URL` (see [Database configuration](#database-configuration)). No Neon lock-in.
+- No Vercel-only primitives (no Edge runtime, no `@vercel/*` packages); every route runs on the Node runtime and `next start` serves them with zero extra config, including `next/image` optimization.
+- All configuration is env-driven and mirrored in [`.env.example`](.env.example).
+
+**1. Containerize the app** — sample `Dockerfile` (Node 24):
+
+```dockerfile
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm build                 # prisma generate && next build
+
+FROM node:24-bookworm-slim AS run
+WORKDIR /app
+ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
+RUN corepack enable
+COPY --from=build /app ./
+EXPOSE 3000
+CMD ["pnpm", "start"]          # next start
+```
+
+For a slimmer image, set `output: "standalone"` in `next.config.ts` and copy only
+`.next/standalone`, `.next/static`, and `public` into the run stage.
+
+**2. Pick a runtime** — the image runs anywhere that runs a container or Node:
+
+| Target | Notes |
+|---|---|
+| **EC2 / any VM** | `docker run -p 3000:3000 --env-file .env`, or `pnpm build && pnpm start` behind nginx/Caddy for TLS |
+| **ECS Fargate / Cloud Run / App Runner** | push the image to a registry, set env vars, front it with the platform's HTTPS load balancer |
+| **Kubernetes (EKS/GKE/AKS)** | `Deployment` + `Service` + `Ingress` (TLS); env from `Secret`/`ConfigMap`; run migrations as a `Job` / init container |
+| **Fly.io / Render / Railway** | point at the `Dockerfile`; set env vars in their dashboard |
+
+**3. Provision Postgres** — swap Neon for any managed or self-hosted Postgres: RDS / Aurora,
+Cloud SQL, Azure Database, or in-cluster **CloudNativePG / StackGres**. Set `DATABASE_URL`
+(pooled if the target has a pooler; otherwise same as direct) and `DIRECT_URL`. Keep a
+pooler (PgBouncer) or a modest replica count to avoid connection exhaustion.
+
+**4. Run migrations on release, not per replica** — once per deploy, before traffic:
+
+```bash
+DATABASE_URL=<pooled> DIRECT_URL=<direct> pnpm exec prisma migrate deploy
+```
+
+On Kubernetes this is a pre-deploy `Job` or init container; on ECS a one-off task; on a VM a release step.
+
+**5. Secrets & TLS**
+
+- Move env values into the platform's secret store (AWS Secrets Manager / SSM, GCP Secret Manager, k8s `Secret`) instead of a file — `.env*` stay gitignored.
+- The **LINE webhook requires public HTTPS**: terminate TLS at the load balancer / ingress and repoint the LINE Developers **Webhook URL** to `https://NEW_HOST/api/line/webhook`.
+- Set `AUTH_SECRET`, `ANTHROPIC_API_KEY`, `LINE_*`, and the DB URLs in the new environment (mirror `.env.example`).
+
+**Not carried over automatically**
+
+- Vercel's build-from-local-tree convenience → replace with CI that builds and pushes the image.
+- Vercel-managed HTTPS/CDN → provide your own load balancer / CDN and TLS certificates.
+- On glibc Linux, `next/image` (sharp) may need a memory-allocator tweak under sustained load — see the Next.js self-hosting guide.
+
+---
+
 ## LINE OA integration
+
+### Add the test LINE OA (QR code)
+
+Scan to add the Messaging API test Official Account (Bot basic ID **`@488yhaah`**),
+then send it a one-on-one message to exercise the inbound webhook flow:
+
+<img src="docs/submissions/qr-line-official.png" alt="LINE Official Account QR code — @488yhaah" width="220" />
+
+> For inbound messages to map and for approved replies to send, the channel's
+> **Webhook URL** must point at the deployed app
+> (`https://YOUR_DEPLOYED_HOST/api/line/webhook`) with **Use webhook** enabled, and
+> `LINE_CHANNEL_SECRET` must match the channel. See the setup steps below.
 
 Webhook endpoint:
 
