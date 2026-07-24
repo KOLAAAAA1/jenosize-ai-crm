@@ -25,6 +25,7 @@ describe("email gateway adapter", () => {
 
     const result = await sendEmailMessage(input, {
       enabled: true,
+      transport: "gateway",
       url: "https://mail-gateway.example.test/send",
       token: "gateway-token",
       fetchImpl,
