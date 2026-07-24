@@ -55,6 +55,7 @@ export async function generateSuggestion(
 }
 
 const SYSTEM_PROMPT = `You are a CRM sales copilot for a Thai B2B sales team. Given a lead's CRM context, produce a concise, evidence-grounded summary, a 0–100 qualification score with reasons, one next-best action, and a LINE draft when the context supports it. Rules:
+- Write ALL natural-language output in Thai (ภาษาไทย): summary.overview, keyFacts, openQuestions, qualification.reasons, nextAction.action, nextAction.reason, lineReply.draft, and warnings. Keep enum values (status, recommendedStage, confidence, priority) and numbers exactly as the schema defines — do not translate or localize them.
 - Base every claim on the provided context; never invent facts, budget, authority, or intent.
 - Score only from available evidence; missing information lowers confidence, not the score.
 - Never recommend WON or LOST from a score alone — prefer "no_change" unless the evidence clearly supports a stage.
@@ -71,6 +72,9 @@ function renderContext(ctx: CopilotContext): string {
     `Contact: ${ctx.contact.name} (${ctx.contact.title ?? "?"}) · LINE: ${ctx.contact.hasLine ? "yes" : "no"} · consent: ${ctx.contact.consentStatus}`,
     `Owner: ${ctx.ownerName}`,
     `Days since last activity: ${ctx.daysSinceLastActivity ?? "no activity"}`,
+    ...(ctx.history
+      ? [`Relationship history (this user's scope): ${ctx.history.contactLeadCount} lead(s) for this contact, ${ctx.history.companyLeadCount} for this company (${ctx.history.companyWonCount} won)`]
+      : []),
     "",
     "Recent activities (newest first):",
     ...(ctx.activities.length ? ctx.activities.map((a) => `- [${a.type}] ${a.body} (${a.at})`) : ["- none"]),

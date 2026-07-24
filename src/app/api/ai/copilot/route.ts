@@ -33,7 +33,18 @@ export async function POST(req: Request) {
   });
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
 
-  const ctx = buildCopilotContext(lead);
+  // Cross-lead relationship signal, scoped to what this caller may see: a sales
+  // rep only counts their own leads (so peers' leads aren't disclosed), while a
+  // manager/admin (leadScope = {}) counts the whole account. Counts include this
+  // lead. Deliberately RBAC-scoped — reps and managers may see different totals.
+  const leadScope = leadScopeFor(user);
+  const [contactLeadCount, companyLeadCount, companyWonCount] = await Promise.all([
+    prisma.lead.count({ where: { contactId: lead.contactId, ...leadScope } }),
+    prisma.lead.count({ where: { companyId: lead.companyId, ...leadScope } }),
+    prisma.lead.count({ where: { companyId: lead.companyId, stage: "WON", ...leadScope } }),
+  ]);
+
+  const ctx = buildCopilotContext(lead, new Date(), { contactLeadCount, companyLeadCount, companyWonCount });
   const suggestion = await generateSuggestion(ctx);
 
   const row = await prisma.aiSuggestion.create({

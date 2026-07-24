@@ -50,8 +50,81 @@ describe("deterministicFallback", () => {
 
   it("blocks outreach when the contact has opted out", () => {
     const r = deterministicFallback(makeCtx({ contact: { name: "Nok", title: null, consentStatus: "OPTED_OUT", hasLine: true } }));
-    expect(r.nextAction?.action).toMatch(/Do not contact/i);
+    expect(r.nextAction?.action).toMatch(/ห้ามติดต่อ/);
     expect(r.nextAction?.priority).toBe("low");
+  });
+
+  it("writes its natural-language output in Thai", () => {
+    const r = deterministicFallback(makeCtx());
+    const thai = /[฀-๿]/; // Thai unicode block
+    expect(r.summary.overview).toMatch(thai);
+    expect(r.nextAction?.action).toMatch(thai);
+    expect(r.qualification.reasons.every((x) => thai.test(x))).toBe(true);
+    expect(r.warnings.every((x) => thai.test(x))).toBe(true);
+  });
+});
+
+describe("deterministicFallback — stage plays", () => {
+  const recent = { daysSinceLastActivity: 3 };
+  it("gives a distinct next action for each of the five pipeline stages", () => {
+    const actions = {
+      NEW: deterministicFallback(makeCtx({ stage: "NEW", ...recent })).nextAction!.action,
+      QUALIFIED: deterministicFallback(makeCtx({ stage: "QUALIFIED", ...recent })).nextAction!.action,
+      PROPOSAL: deterministicFallback(makeCtx({ stage: "PROPOSAL", ...recent })).nextAction!.action,
+      WON: deterministicFallback(makeCtx({ stage: "WON", ...recent })).nextAction!.action,
+      LOST: deterministicFallback(makeCtx({ stage: "LOST", ...recent })).nextAction!.action,
+    };
+    expect(actions.NEW).toMatch(/คัดกรอง/);
+    expect(actions.QUALIFIED).toMatch(/ส่งข้อเสนอ/);
+    expect(actions.PROPOSAL).toMatch(/ติดตามข้อเสนอ/);
+    expect(actions.WON).toMatch(/ส่งมอบ|ออนบอร์ด/);
+    expect(actions.LOST).toMatch(/เสียโอกาส/);
+    // all five must be different plays, not one generic action
+    expect(new Set(Object.values(actions)).size).toBe(5);
+  });
+
+  it("escalates a still-open lead to high priority when it goes stale", () => {
+    const r = deterministicFallback(makeCtx({ stage: "NEW", daysSinceLastActivity: 90 }));
+    expect(r.nextAction?.priority).toBe("high");
+    expect(r.nextAction?.reason).toMatch(/รีบติดตาม/);
+  });
+});
+
+describe("deterministicFallback — repeat-customer signal", () => {
+  const repeatHistory = { contactLeadCount: 3, companyLeadCount: 5, companyWonCount: 1 };
+
+  it("flags a repeat customer and folds a cross-sell nudge into the next action", () => {
+    const r = deterministicFallback(makeCtx({ history: repeatHistory }));
+    expect(r.summary.keyFacts.some((f) => /ลูกค้าเก่า/.test(f))).toBe(true);
+    expect(r.nextAction?.reason).toMatch(/ลูกค้าเก่า/);
+  });
+
+  it("applies the repeat-customer nudge across all stages, including WON", () => {
+    const r = deterministicFallback(makeCtx({ stage: "WON", history: { contactLeadCount: 2, companyLeadCount: 2, companyWonCount: 1 } }));
+    expect(r.nextAction?.reason).toMatch(/ลูกค้าเก่า/);
+  });
+
+  it("adds no repeat-customer signal for a single-lead or history-less contact", () => {
+    const single = deterministicFallback(makeCtx({ history: { contactLeadCount: 1, companyLeadCount: 1, companyWonCount: 0 } }));
+    expect(single.summary.keyFacts.some((f) => /ดีลแรก/.test(f))).toBe(true);
+    expect(single.nextAction?.reason).not.toMatch(/ลูกค้าเก่า/);
+
+    const none = deterministicFallback(makeCtx());
+    expect(none.summary.keyFacts.some((f) => /ลูกค้าเก่า|ดีลแรก/.test(f))).toBe(false);
+  });
+
+  it("keeps the opt-out block above the repeat-customer nudge", () => {
+    const r = deterministicFallback(makeCtx({
+      contact: { name: "Nok", title: null, consentStatus: "OPTED_OUT", hasLine: true },
+      history: repeatHistory,
+    }));
+    expect(r.nextAction?.action).toMatch(/ห้ามติดต่อ/);
+    expect(r.nextAction?.reason).not.toMatch(/ลูกค้าเก่า/);
+  });
+
+  it("is deterministic with history present", () => {
+    expect(deterministicFallback(makeCtx({ history: repeatHistory })))
+      .toEqual(deterministicFallback(makeCtx({ history: repeatHistory })));
   });
 });
 

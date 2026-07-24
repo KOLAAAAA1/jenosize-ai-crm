@@ -16,7 +16,17 @@ export type CopilotContext = {
   activities: { type: ActivityType; body: string; at: string }[];
   messages: { direction: MessageDirection; body: string; at: string }[];
   daysSinceLastActivity: number | null; // null when there is no activity at all
+  // Cross-lead relationship signal for this contact/company. Counts are computed
+  // by the route under the caller's lead scope (a sales rep only sees their own),
+  // and include the current lead. Omitted when the caller didn't compute them.
+  history?: LeadHistory;
   now: string; // ISO anchor, injectable for deterministic tests
+};
+
+export type LeadHistory = {
+  contactLeadCount: number;
+  companyLeadCount: number;
+  companyWonCount: number;
 };
 
 type LeadWithRelations = {
@@ -36,8 +46,13 @@ type LeadWithRelations = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Pure: Prisma row (with relations) → CopilotContext. `now` is injectable so the
-// derived `daysSinceLastActivity` is deterministic under test.
-export function buildCopilotContext(lead: LeadWithRelations, now: Date = new Date()): CopilotContext {
+// derived `daysSinceLastActivity` is deterministic under test. `history` is the
+// optional cross-lead relationship signal the route supplies (see LeadHistory).
+export function buildCopilotContext(
+  lead: LeadWithRelations,
+  now: Date = new Date(),
+  history?: LeadHistory,
+): CopilotContext {
   const activityDates = lead.activities.map((a) => a.createdAt.getTime());
   const messageDates = lead.messages.map((m) => m.createdAt.getTime());
   const lastTouch = Math.max(0, ...activityDates, ...messageDates);
@@ -64,6 +79,7 @@ export function buildCopilotContext(lead: LeadWithRelations, now: Date = new Dat
     activities: lead.activities.map((a) => ({ type: a.type, body: a.body, at: a.createdAt.toISOString() })),
     messages: lead.messages.map((m) => ({ direction: m.direction, body: m.body, at: m.createdAt.toISOString() })),
     daysSinceLastActivity,
+    history,
     now: now.toISOString(),
   };
 }

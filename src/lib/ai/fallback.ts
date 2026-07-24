@@ -1,14 +1,19 @@
 import type { Stage, Source } from "@prisma/client";
-import type { CopilotContext } from "./context";
+import type { CopilotContext, LeadHistory } from "./context";
 import { clampScore, type CopilotResult } from "./schema";
 import { formatTHB } from "@/lib/format";
 
 // Deterministic, rule-based fallback used when the model service is unavailable
 // (or no API key is configured). Per SKILL.md "Model service unavailable": a
 // rule-based score from stage + activity recency + source, a summary templated
-// from stored fields, and NO fabricated model output — no invented prose
-// summary, no model-style reasoning, no LINE draft. Every value here is
-// mechanically derived from the context so the output is fully reproducible.
+// from stored fields, a stage-appropriate next action, and a repeat-customer
+// signal when the contact/company has multiple leads — but NO fabricated model
+// output: no invented prose, no model-style reasoning, no LINE draft. Every value
+// here is mechanically derived from the context so the output is reproducible.
+//
+// All natural-language output is Thai (the CRM's operating language); enum tokens
+// and numbers stay as-is. The real-model path is instructed to answer in Thai too
+// (see SYSTEM_PROMPT in copilot.ts), so both modes read the same for the user.
 
 const STAGE_BASE: Record<Stage, number> = {
   NEW: 30,
@@ -24,11 +29,74 @@ const SOURCE_BONUS: Record<Source, number> = {
   MANUAL: 0,
 };
 
+// Thai display labels for the enum tokens, used only in the prose fields.
+const STAGE_TH: Record<Stage, string> = {
+  NEW: "ลูกค้าใหม่",
+  QUALIFIED: "ผ่านการคัดกรอง",
+  PROPOSAL: "ยื่นข้อเสนอ",
+  WON: "ปิดการขายสำเร็จ",
+  LOST: "เสียโอกาส",
+};
+
+const SOURCE_TH: Record<Source, string> = {
+  LINE_OA: "LINE OA",
+  WEBSITE: "เว็บไซต์",
+  MANUAL: "บันทึกเอง",
+};
+
+const CONSENT_TH: Record<string, string> = {
+  UNKNOWN: "ไม่ทราบ",
+  OPTED_IN: "ยินยอม",
+  OPTED_OUT: "ปฏิเสธการติดต่อ",
+};
+
 function recencyAdjustment(days: number | null): { delta: number; label: string } {
-  if (days == null) return { delta: -5, label: "no recorded activity yet" };
-  if (days <= 7) return { delta: 10, label: `active in the last ${days} day(s)` };
-  if (days <= 30) return { delta: 5, label: `last activity ${days} days ago` };
-  return { delta: -5, label: `stale — no activity for ${days} days` };
+  if (days == null) return { delta: -5, label: "ยังไม่มีบันทึกกิจกรรม" };
+  if (days <= 7) return { delta: 10, label: `มีความเคลื่อนไหวใน ${days} วันที่ผ่านมา` };
+  if (days <= 30) return { delta: 5, label: `กิจกรรมล่าสุดเมื่อ ${days} วันก่อน` };
+  return { delta: -5, label: `เงียบหาย — ไม่มีความเคลื่อนไหวมา ${days} วัน` };
+}
+
+type NextAction = { action: string; reason: string; priority: "low" | "medium" | "high" };
+
+// One next-best-action per pipeline stage — the "5 cases" that make the fallback
+// suggestion stage-aware instead of recency-only. These describe the sales play,
+// never an automated stage move (recommendedStage stays `no_change`).
+function stagePlay(ctx: CopilotContext): NextAction {
+  const { name } = ctx.contact;
+  const company = ctx.company.name;
+  switch (ctx.stage) {
+    case "NEW":
+      return { action: `คัดกรอง ${name} จาก ${company} — ยืนยันงบประมาณ อำนาจตัดสินใจ และกรอบเวลา`, reason: "ลูกค้าใหม่ ควรประเมินความเหมาะสมก่อนลงแรง", priority: "medium" };
+    case "QUALIFIED":
+      return { action: `จัดทำและส่งข้อเสนอให้ ${name}`, reason: "ลูกค้าผ่านการคัดกรองแล้ว ผลักดันไปสู่การยื่นข้อเสนอ", priority: "high" };
+    case "PROPOSAL":
+      return { action: `ติดตามข้อเสนอกับ ${name} และยืนยันวันตัดสินใจ`, reason: "ยื่นข้อเสนอไปแล้ว เร่งให้เกิดการตัดสินใจ", priority: "high" };
+    case "WON":
+      return { action: `เริ่มการส่งมอบ/ออนบอร์ดให้ ${company} และขอบคุณ ${name}`, reason: "ปิดการขายสำเร็จ ดูแลการส่งมอบและรักษาความสัมพันธ์", priority: "medium" };
+    case "LOST":
+      return { action: `บันทึกเหตุผลที่เสียโอกาส และตั้งเตือนติดตามกลับมาภายหลังกับ ${name}`, reason: "เสียโอกาสครั้งนี้ บันทึกสาเหตุและเปิดช่องกลับมาในอนาคต", priority: "low" };
+  }
+}
+
+// Cross-lead relationship signal. Returns a key fact for the summary and, when
+// the contact/company already has more than one lead, a repeat-customer clause to
+// fold into the next action. Returns null when the route didn't compute history.
+function relationshipSignal(ctx: CopilotContext): { keyFact: string; repeatClause: string | null } | null {
+  const h: LeadHistory | undefined = ctx.history;
+  if (!h) return null;
+
+  const company = ctx.company.name;
+  const isRepeat = h.contactLeadCount > 1 || h.companyLeadCount > 1;
+  if (!isRepeat) {
+    return { keyFact: `ความสัมพันธ์: เป็นดีลแรกที่บันทึกไว้ของ ${company}`, repeatClause: null };
+  }
+
+  const wonPart = h.companyWonCount > 0 ? ` (ปิดสำเร็จ ${h.companyWonCount})` : "";
+  return {
+    keyFact: `ลูกค้าเก่า: ${h.companyLeadCount} ดีลกับ ${company}${wonPart} · ${h.contactLeadCount} ดีลกับ ${ctx.contact.name}`,
+    repeatClause: `เป็นลูกค้าเก่า (${h.companyLeadCount} ดีลกับ ${company}) — อ้างอิงความสัมพันธ์เดิมและมองหาโอกาสขายเพิ่ม/ต่อยอด`,
+  };
 }
 
 // Pure: CopilotContext → deterministic CopilotResult. Score inputs are exactly
@@ -41,41 +109,53 @@ export function deterministicFallback(ctx: CopilotContext): CopilotResult {
   const score = clampScore(base + recency.delta + sourceBonus);
 
   const reasons = [
-    `Stage ${ctx.stage} → base ${base}`,
-    `Recency: ${recency.label} (${recency.delta >= 0 ? "+" : ""}${recency.delta})`,
-    `Source ${ctx.source} (+${sourceBonus})`,
+    `สเตจ ${STAGE_TH[ctx.stage]} → ฐาน ${base}`,
+    `ความเคลื่อนไหว: ${recency.label} (${recency.delta >= 0 ? "+" : ""}${recency.delta})`,
+    `ที่มา ${SOURCE_TH[ctx.source]} (+${sourceBonus})`,
   ];
 
-  // Mechanically-derived next action, tied only to recency/consent — never
-  // model-flavored. Suppress outreach entirely when the contact has opted out.
+  // Mechanically-derived next action: a stage-appropriate play, escalated when a
+  // still-open lead has gone stale and enriched with a repeat-customer nudge —
+  // never model-flavored. Opt-out overrides everything: suppress outreach.
   const optedOut = ctx.contact.consentStatus === "OPTED_OUT";
+  const openStage = ctx.stage !== "WON" && ctx.stage !== "LOST";
   const stale = ctx.daysSinceLastActivity == null || ctx.daysSinceLastActivity > 30;
-  const nextAction = optedOut
-    ? {
-        action: `Do not contact ${ctx.contact.name} — consent is OPTED_OUT`,
-        reason: "Contact has opted out; outreach is blocked until consent changes.",
-        priority: "low" as const,
-      }
-    : {
-        action: stale
-          ? `Follow up with ${ctx.contact.name} at ${ctx.company.name}`
-          : `Continue engagement with ${ctx.contact.name}`,
-        reason: stale
-          ? `No activity for ${ctx.daysSinceLastActivity ?? "any recorded"} days.`
-          : "Recent activity present; keep momentum.",
-        priority: (stale ? "high" : "medium") as "high" | "medium",
-      };
+  const relationship = relationshipSignal(ctx);
+
+  let nextAction: NextAction;
+  if (optedOut) {
+    nextAction = {
+      action: `ห้ามติดต่อ ${ctx.contact.name} — ลูกค้าปฏิเสธการติดต่อ (OPTED_OUT)`,
+      reason: "ลูกค้าปฏิเสธการติดต่อ งดการติดต่อจนกว่าสถานะความยินยอมจะเปลี่ยน",
+      priority: "low",
+    };
+  } else {
+    const play = stagePlay(ctx);
+    let reason = play.reason;
+    let priority = play.priority;
+    if (openStage && stale) {
+      priority = "high";
+      reason += ctx.daysSinceLastActivity == null
+        ? " ยังไม่มีบันทึกกิจกรรม — ควรรีบติดตาม"
+        : ` ไม่มีความเคลื่อนไหวมา ${ctx.daysSinceLastActivity} วัน — ควรรีบติดตาม`;
+    }
+    if (relationship?.repeatClause) {
+      reason += ` ${relationship.repeatClause}`;
+    }
+    nextAction = { action: play.action, reason, priority };
+  }
 
   const overview =
     `${ctx.title} — ${ctx.company.name}${ctx.company.industry ? ` (${ctx.company.industry})` : ""}. ` +
-    `Stage ${ctx.stage}, source ${ctx.source}, value ${formatTHB(ctx.valueTHB)}, owner ${ctx.ownerName}. ` +
-    `${ctx.daysSinceLastActivity == null ? "No activity recorded yet." : `Last activity ${ctx.daysSinceLastActivity} day(s) ago.`}`;
+    `สเตจ ${STAGE_TH[ctx.stage]} · ที่มา ${SOURCE_TH[ctx.source]} · มูลค่า ${formatTHB(ctx.valueTHB)} · เจ้าของดีล ${ctx.ownerName}. ` +
+    `${ctx.daysSinceLastActivity == null ? "ยังไม่มีบันทึกกิจกรรม" : `กิจกรรมล่าสุดเมื่อ ${ctx.daysSinceLastActivity} วันก่อน`}`;
 
   const keyFacts = [
-    `Company size: ${ctx.company.size ?? "unknown"}`,
-    `Contact: ${ctx.contact.name}${ctx.contact.title ? `, ${ctx.contact.title}` : ""}`,
-    `LINE linked: ${ctx.contact.hasLine ? "yes" : "no"} · consent: ${ctx.contact.consentStatus}`,
-    `Activities on record: ${ctx.activities.length}, messages: ${ctx.messages.length}`,
+    `ขนาดบริษัท: ${ctx.company.size ?? "ไม่ระบุ"}`,
+    `ผู้ติดต่อ: ${ctx.contact.name}${ctx.contact.title ? `, ${ctx.contact.title}` : ""}`,
+    `เชื่อม LINE: ${ctx.contact.hasLine ? "ใช่" : "ไม่"} · ความยินยอม: ${CONSENT_TH[ctx.contact.consentStatus] ?? ctx.contact.consentStatus}`,
+    `กิจกรรมที่บันทึก: ${ctx.activities.length} · ข้อความ: ${ctx.messages.length}`,
+    ...(relationship ? [relationship.keyFact] : []),
   ];
 
   return {
@@ -83,7 +163,7 @@ export function deterministicFallback(ctx: CopilotContext): CopilotResult {
     summary: {
       overview,
       keyFacts,
-      openQuestions: ctx.score == null ? ["Lead has not been qualified yet."] : [],
+      openQuestions: ctx.score == null ? ["ยังไม่ได้ประเมินคุณภาพของลีดนี้"] : [],
     },
     qualification: {
       score,
@@ -96,7 +176,7 @@ export function deterministicFallback(ctx: CopilotContext): CopilotResult {
     nextAction,
     lineReply: null, // no conversation-grounded draft in fallback mode
     warnings: [
-      "AI suggestions are temporarily unavailable — this is a deterministic fallback derived from stored CRM fields, not a model-generated result.",
+      "ระบบ AI ไม่พร้อมใช้งานชั่วคราว — นี่คือผลลัพธ์แบบกำหนดกฎ (deterministic fallback) ที่สร้างจากข้อมูลใน CRM ไม่ใช่ผลจากโมเดล",
     ],
   };
 }

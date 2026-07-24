@@ -261,7 +261,7 @@ Return a structured result using the following shape.
 - `suggested_writes` are proposals only. They are not instructions to execute automatically.
 - Do not include hidden chain-of-thought. Provide concise reasons and evidence references instead.
 - Do not expose full personal data when a masked value is enough.
-- Use the language requested by the user. Otherwise, match the most recent customer message.
+- Write all natural-language output fields in **Thai (ภาษาไทย)** by default — this CRM's operating language — for both the model path and the deterministic fallback. Keep enum values (`status`, `recommendedStage`, `confidence`, `priority`) and numbers unchanged. For a LINE reply draft, match the customer's most recent message language if it differs from Thai.
 
 ---
 
@@ -467,7 +467,9 @@ Return:
 - `status: service_unavailable`
 - A deterministic fallback summary based on stored CRM fields and recent activities, when possible.
 - A **rule-based fallback score** derived from `stage` + activity recency + `source`, explicitly labeled as `fallback` in `createdBy` — never presented as a model-generated score. Omit the score if even the rule inputs are missing.
-- No fabricated *model* output (no invented model summary, reasons, or next action).
+- A **stage-appropriate next action** (one deterministic play per pipeline stage — qualify / send proposal / chase decision / onboard / capture loss reason), escalated when a still-open lead is stale.
+- A **repeat-customer signal** when the contact or company already has more than one lead in the caller's scope: a relationship key fact plus a cross-sell/relationship nudge on the next action (suppressed when the contact is OPTED_OUT).
+- No fabricated *model* output (no invented model summary, reasons, or LINE draft).
 - A clear notice that AI suggestions are temporarily unavailable and this is the deterministic fallback.
 - A retryable error code for the application.
 - No automatic write or send.
