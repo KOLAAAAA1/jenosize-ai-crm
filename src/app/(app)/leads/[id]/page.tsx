@@ -131,7 +131,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               {lead.company.name} · {contactName(lead.contact)}
             </p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
             {/* Spacer label keeps the badge in the same label/control grid as the
                 selects, so its pill center-aligns with the selection/button line. */}
             <div className="flex flex-col gap-1">
@@ -156,8 +156,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <dl className="flex flex-col gap-3">
               {profile.map((row) => (
                 <div key={row.label} className="flex justify-between gap-4 text-sm">
-                  <dt className="text-zinc-500 dark:text-zinc-400">{row.label}</dt>
-                  <dd className="text-right font-medium text-zinc-800 dark:text-zinc-200">{row.value}</dd>
+                  <dt className="flex-none text-zinc-500 dark:text-zinc-400">{row.label}</dt>
+                  <dd className="min-w-0 break-words text-right font-medium text-zinc-800 dark:text-zinc-200">{row.value}</dd>
                 </div>
               ))}
             </dl>

@@ -26,14 +26,14 @@ export function StageMover({ leadId, current }: { leadId: string; current: Stage
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <label htmlFor="lead-stage" className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Stage</label>
       <select
         id="lead-stage"
         value={current}
         onChange={onChange}
         disabled={pending}
-        className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 outline-none focus:border-indigo-500 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+        className="max-w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 outline-none focus:border-indigo-500 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
       >
         {STAGES.map((s) => (
           <option key={s} value={s}>{STAGE_META[s].label}</option>

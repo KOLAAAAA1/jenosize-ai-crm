@@ -58,8 +58,8 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
             <dl className="flex flex-col gap-3">
               {info.map((row) => (
                 <div key={row.label} className="flex justify-between gap-4 text-sm">
-                  <dt className="text-zinc-500 dark:text-zinc-400">{row.label}</dt>
-                  <dd className="truncate text-right font-medium text-zinc-800 dark:text-zinc-200">{row.value}</dd>
+                  <dt className="flex-none text-zinc-500 dark:text-zinc-400">{row.label}</dt>
+                  <dd className="min-w-0 break-words text-right font-medium text-zinc-800 dark:text-zinc-200">{row.value}</dd>
                 </div>
               ))}
             </dl>
