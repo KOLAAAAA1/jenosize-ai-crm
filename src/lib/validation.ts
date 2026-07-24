@@ -109,6 +109,9 @@ export type LiffConnectInput = z.infer<typeof liffConnectSchema>;
 // LIFF status probe: is this verified LINE user already a linked contact?
 export const liffStatusSchema = z.object({ idToken: z.string().trim().min(1, "Missing LINE identity token") });
 
+// Manual LINE reply composer (Block 9): a rep-written outbound draft.
+export const lineDraftSchema = z.object({ body: z.string().trim().min(1, "Message is required").max(2000, "Message is too long") });
+
 // Follow-up task on a lead (PLAN §11.2). `dueAt` is an optional yyyy-mm-dd string
 // from a date input; the action converts it to a Date.
 export const taskSchema = z.object({

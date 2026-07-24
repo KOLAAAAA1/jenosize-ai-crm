@@ -8,6 +8,7 @@ import { formatDateTime, formatTHB, timeAgo } from "@/lib/format";
 import { StageMover } from "./stage-mover";
 import { CopilotPanel, type PendingSuggestion } from "./copilot-panel";
 import { LineDraftsPanel, type PendingLineDraft } from "./line-drafts-panel";
+import { LineCompose } from "./line-compose";
 import { EmailPanel, type PendingEmailDraft } from "./email-panel";
 import { ChatHistory, type ChatMessage } from "./chat-history";
 import { TasksPanel, type LeadTask } from "./tasks-panel";
@@ -175,6 +176,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
           <div className="mt-4">
             <CopilotPanel leadId={lead.id} suggestions={pendingSuggestions} />
+          </div>
+
+          <div className="mt-4">
+            <LineCompose leadId={lead.id} lineLinked={lead.contact.lineUserId != null} optedOut={lead.contact.consentStatus === "OPTED_OUT"} />
           </div>
 
           <div className="mt-4">

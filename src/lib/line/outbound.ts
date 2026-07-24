@@ -81,6 +81,39 @@ export async function saveLineDraftFromAiSuggestion(
   return { ok: true, leadId: suggestion.leadId, messageId };
 }
 
+// Manual compose: a rep writes a LINE reply directly (no AI). Produces the same
+// Message(DRAFT) that approveAndSendLineDraft consumes — so the human-approval
+// send path is identical whether the draft came from the copilot or a person.
+// This is what makes an outbound send possible when the AI is on the fallback
+// (which never produces a LINE draft).
+export async function saveLineDraftManual(
+  db: PrismaClient,
+  leadId: string,
+  body: string,
+  userId: string,
+): Promise<SaveDraftResult> {
+  const text = body.trim();
+  if (!text) return { ok: false, error: "Message is empty" };
+
+  const lead = await db.lead.findUnique({ where: { id: leadId }, include: { contact: true } });
+  if (!lead) return { ok: false, error: "Lead not found" };
+  if (!lead.contact.lineUserId) return { ok: false, error: "Contact is not linked to LINE" };
+  if (lead.contact.consentStatus === "OPTED_OUT") return { ok: false, error: "Contact has opted out of LINE outreach" };
+
+  const messageId = randomUUID();
+  await db.$transaction(async (tx) => {
+    await tx.message.create({
+      data: { id: messageId, leadId: lead.id, contactId: lead.contactId, channel: "LINE", direction: "OUT", status: "DRAFT", body: text },
+    });
+    await tx.activity.create({
+      data: { leadId: lead.id, userId, type: "LINE_OUT", body: "LINE draft composed manually.", metadata: { messageId } },
+    });
+  });
+
+  logger.info("line.draft.manual", { leadId: lead.id, messageId, userId });
+  return { ok: true, leadId: lead.id, messageId };
+}
+
 export async function approveAndSendLineDraft(
   db: PrismaClient,
   messageId: string,

@@ -6,13 +6,14 @@ import { getSessionUser, type SessionUser } from "@/lib/auth";
 import { canAccessLead, canReassignLead } from "@/lib/access-control";
 import { applyStageMove, assignLeadOwner, updateLeadDealFields } from "@/lib/leads-service";
 import { createTaskForLead, toggleTask } from "@/lib/tasks-service";
-import { approveAndSendLineDraft, saveLineDraftFromAiSuggestion } from "@/lib/line/outbound";
+import { approveAndSendLineDraft, saveLineDraftFromAiSuggestion, saveLineDraftManual } from "@/lib/line/outbound";
 import { approveAndSendEmailDraft, saveEmailDraft as persistEmailDraft } from "@/lib/email/outbound";
 import {
   crmEntityIdSchema,
   dealFieldsSchema,
   emailDraftSchema,
   leadAssignmentSchema,
+  lineDraftSchema,
   stageMoveSchema,
   suggestionReviewSchema,
   taskSchema,
@@ -100,6 +101,30 @@ export async function saveLineDraft(id: string): Promise<SaveLineDraftActionResu
   if (!canAccessLead(user, suggestion.lead.ownerId)) return { ok: false, error: "Forbidden" };
 
   const res = await saveLineDraftFromAiSuggestion(prisma, id, user.id);
+  if (!res.ok) return { ok: false, error: res.error };
+
+  revalidatePath(`/leads/${res.leadId}`);
+  return { ok: true };
+}
+
+// Manual compose (Block 9): a rep writes a LINE reply → Message(DRAFT), which then
+// flows through the existing approve→send path. Owner/manager-guarded.
+export async function createLineDraft(leadId: string, body: string): Promise<SaveLineDraftActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Unauthorized" };
+
+  const parsedId = crmEntityIdSchema.safeParse(leadId);
+  if (!parsedId.success) return { ok: false, error: parsedId.error.issues[0]?.message ?? "Invalid lead id" };
+  leadId = parsedId.data;
+
+  const parsed = lineDraftSchema.safeParse({ body });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid message" };
+
+  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { ownerId: true } });
+  if (!lead) return { ok: false, error: "Lead not found" };
+  if (!canAccessLead(user, lead.ownerId)) return { ok: false, error: "Forbidden" };
+
+  const res = await saveLineDraftManual(prisma, leadId, parsed.data.body, user.id);
   if (!res.ok) return { ok: false, error: res.error };
 
   revalidatePath(`/leads/${res.leadId}`);

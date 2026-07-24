@@ -7,7 +7,7 @@ import { copilotResultSchema } from "@/lib/ai/schema";
 import { POST as lineWebhookPost } from "@/app/api/line/webhook/route";
 import { computeLineSignature } from "@/lib/line/signature";
 import { invalidWebhookEventId, reprocessFailedLineWebhook } from "@/lib/line/service";
-import { approveAndSendLineDraft, saveLineDraftFromAiSuggestion } from "@/lib/line/outbound";
+import { approveAndSendLineDraft, saveLineDraftFromAiSuggestion, saveLineDraftManual } from "@/lib/line/outbound";
 
 // Part 3 required test #1: core CRM flow — create lead → move stage → activity logged.
 // Integration test against the local Postgres (run `pnpm db:up` first).
@@ -358,5 +358,34 @@ describe("Part 3 — LINE webhook security/idempotency", () => {
     const again = await reprocessFailedLineWebhook(prisma, backfillEventId);
     expect(again).toMatchObject({ ok: true, alreadyProcessed: true });
     expect(await prisma.message.count({ where: { providerMessageId: backfillMessageId } })).toBe(1);
+  });
+});
+
+describe("Block 9 — manual LINE draft compose → send", () => {
+  it("saves a rep-composed draft, then sends it through the approve path", async (ctx) => {
+    if (!dbOk) ctx.skip();
+    const draft = await saveLineDraftManual(prisma, ids.lineLead, "สวัสดีครับ ทดสอบส่งจริง", ids.user);
+    expect(draft).toMatchObject({ ok: true, leadId: ids.lineLead });
+    if (!draft.ok) throw new Error("expected manual draft to save");
+
+    const message = await prisma.message.findUniqueOrThrow({ where: { id: draft.messageId } });
+    expect(message.status).toBe("DRAFT");
+    expect(message.direction).toBe("OUT");
+    expect(message.body).toBe("สวัสดีครับ ทดสอบส่งจริง");
+
+    const sent = await approveAndSendLineDraft(prisma, draft.messageId, ids.user, async (input) => ({
+      ok: true,
+      providerMessageId: `mock:${input.retryKey}`,
+      mode: "mock",
+      requestId: null,
+    }));
+    expect(sent).toMatchObject({ ok: true, mode: "mock" });
+    expect((await prisma.message.findUniqueOrThrow({ where: { id: draft.messageId } })).status).toBe("SENT");
+  });
+
+  it("refuses to draft when the contact is not linked to LINE, or the body is empty", async (ctx) => {
+    if (!dbOk) ctx.skip();
+    expect(await saveLineDraftManual(prisma, ids.lead, "hi", ids.user)).toEqual({ ok: false, error: "Contact is not linked to LINE" });
+    expect(await saveLineDraftManual(prisma, ids.lineLead, "   ", ids.user)).toEqual({ ok: false, error: "Message is empty" });
   });
 });
