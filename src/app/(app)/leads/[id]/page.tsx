@@ -26,26 +26,26 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const [lead, assignableOwners] = await Promise.all([
     prisma.lead.findFirst({
-    where: { id, ...leadScopeFor(user) },
-    include: {
-      company: true,
-      contact: true,
-      owner: true,
-      activities: { include: { user: true }, orderBy: { createdAt: "desc" } },
-      messages: { orderBy: { createdAt: "desc" } },
-      suggestions: { where: { status: "SUGGESTED" }, orderBy: { createdAt: "desc" } },
-      tasks: {
-        where: canReassignLead(user) ? {} : { ownerId: user.id },
-        orderBy: [{ status: "desc" }, { dueAt: "asc" }, { createdAt: "asc" }],
+      where: { id, ...leadScopeFor(user) },
+      include: {
+        company: true,
+        contact: true,
+        owner: true,
+        activities: { include: { user: true }, orderBy: { createdAt: "desc" } },
+        messages: { orderBy: { createdAt: "desc" } },
+        suggestions: { where: { status: "SUGGESTED" }, orderBy: { createdAt: "desc" } },
+        tasks: {
+          where: canReassignLead(user) ? {} : { ownerId: user.id },
+          orderBy: [{ status: "desc" }, { dueAt: "asc" }, { createdAt: "asc" }],
+        },
       },
-    },
     }),
     canReassignLead(user)
       ? prisma.user.findMany({
-          where: { role: { in: ["MANAGER", "SALES"] } },
-          select: { id: true, name: true, role: true },
-          orderBy: { name: "asc" },
-        })
+        where: { role: { in: ["MANAGER", "SALES"] } },
+        select: { id: true, name: true, role: true },
+        orderBy: { name: "asc" },
+      })
       : Promise.resolve([]),
   ]);
 
@@ -131,9 +131,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${STAGE_META[lead.stage].badge}`}>
-              {STAGE_META[lead.stage].label}
-            </span>
+            {/* Spacer label keeps the badge in the same label/control grid as the
+                selects, so its pill center-aligns with the selection/button line. */}
+            <div className="flex flex-col gap-1">
+              <span aria-hidden="true" className="select-none text-xs font-medium uppercase tracking-wide text-transparent">Status</span>
+              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${STAGE_META[lead.stage].badge}`}>
+                {STAGE_META[lead.stage].label}
+              </span>
+            </div>
             <StageMover leadId={lead.id} current={lead.stage} />
             {canReassignLead(user) && (
               <OwnerAssigner leadId={lead.id} ownerId={lead.ownerId} owners={assignableOwners} />

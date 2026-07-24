@@ -27,8 +27,9 @@ export function StageMover({ leadId, current }: { leadId: string; current: Stage
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Stage</label>
+      <label htmlFor="lead-stage" className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Stage</label>
       <select
+        id="lead-stage"
         value={current}
         onChange={onChange}
         disabled={pending}
@@ -39,7 +40,7 @@ export function StageMover({ leadId, current }: { leadId: string; current: Stage
         ))}
       </select>
       {pending && <span className="text-xs text-zinc-400">Saving…</span>}
-      {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+      {error && <span className="basis-full text-xs text-red-600 dark:text-red-400">{error}</span>}
     </div>
   );
 }
