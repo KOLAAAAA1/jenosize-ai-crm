@@ -69,7 +69,17 @@ checkRequired("DATABASE_URL");
 checkRequired("DIRECT_URL");
 checkRequired("AUTH_SECRET", { minLength: 32 });
 checkRequired("APP_URL");
-checkRequired("ANTHROPIC_API_KEY");
+// AI engine: either provider key satisfies this (OpenRouter preferred). With
+// neither, the copilot still runs but only returns its deterministic fallback.
+{
+  const aiKey = value("OPENROUTER_API_KEY") || value("ANTHROPIC_API_KEY");
+  const which = value("OPENROUTER_API_KEY") ? "OpenRouter" : value("ANTHROPIC_API_KEY") ? "Anthropic" : "";
+  add(
+    "AI provider key",
+    Boolean(aiKey && !isPlaceholder(aiKey)),
+    aiKey ? (isPlaceholder(aiKey) ? "placeholder value" : which) : "missing OPENROUTER_API_KEY / ANTHROPIC_API_KEY",
+  );
+}
 
 checkPostgresUrl("DATABASE_URL", { shouldBePooled: true });
 checkPostgresUrl("DIRECT_URL");
