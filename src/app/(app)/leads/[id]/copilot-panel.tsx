@@ -15,9 +15,15 @@ export function CopilotPanel({ leadId, suggestions }: { leadId: string; suggesti
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // The copilot always returns something, but when the AI provider is unavailable
+  // it degrades to the deterministic fallback (status "service_unavailable"). We
+  // surface that so the user can retry the model manually (free tiers rate-limit
+  // and recover) — the rule-based result is still shown meanwhile.
+  const [serviceUnavailable, setServiceUnavailable] = useState(false);
 
   function generate() {
     setError(null);
+    setServiceUnavailable(false);
     startTransition(async () => {
       const res = await fetch("/api/ai/copilot", {
         method: "POST",
@@ -27,6 +33,13 @@ export function CopilotPanel({ leadId, suggestions }: { leadId: string; suggesti
       if (!res.ok) {
         setError(`Generate failed (${res.status})`);
         return;
+      }
+      const data = (await res.json().catch(() => null)) as {
+        suggestion?: { source?: string; status?: string };
+      } | null;
+      const s = data?.suggestion;
+      if (s?.source === "fallback" || s?.status === "service_unavailable") {
+        setServiceUnavailable(true);
       }
       router.refresh();
     });
@@ -70,6 +83,19 @@ export function CopilotPanel({ leadId, suggestions }: { leadId: string; suggesti
           {pending ? "Working…" : "Generate suggestion"}
         </button>
       </div>
+
+      {serviceUnavailable && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+          <span>บริการ AI ไม่พร้อมใช้งานชั่วคราว — แสดงผลแบบกำหนดกฎแทน คุณสามารถลองใหม่ได้</span>
+          <button
+            onClick={generate}
+            disabled={pending}
+            className="rounded-lg border border-amber-400 px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-60 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/40"
+          >
+            {pending ? "กำลังลองใหม่…" : "ลองอีกครั้ง"}
+          </button>
+        </div>
+      )}
 
       {error && <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
 

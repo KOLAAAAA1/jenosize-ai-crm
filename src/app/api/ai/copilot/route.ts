@@ -9,6 +9,9 @@ import { crmEntityIdSchema } from "@/lib/validation";
 
 // The copilot may call the Anthropic SDK (Node APIs) — force the Node runtime.
 export const runtime = "nodejs";
+// Free-tier models can be slow; allow the function up to 5 minutes to match the
+// OpenRouter caller's 5-minute timeout (OPENROUTER_TIMEOUT_MS in lib/ai/copilot).
+export const maxDuration = 300;
 
 // POST /api/ai/copilot { leadId } → runs the copilot for one lead, persists the
 // result as an AiSuggestion(SUGGESTED), and returns it. Degrades to the

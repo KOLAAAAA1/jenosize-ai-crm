@@ -4,9 +4,17 @@ import { deterministicFallback } from "./fallback";
 import { logger } from "@/lib/logger";
 
 // The single seam that makes this testable without a network or a DB: the model
-// call is an injected dependency. Tests pass a `callModel` that throws and assert
-// the result falls back deterministically. Production passes nothing and the real
-// Anthropic client is used — but only when a key is actually configured.
+// call is an injected dependency — a "mock-up" of the real provider call.
+//
+// Unit tests inject a mock `callModel` to drive each branch deterministically,
+// with no HTTP and no API key (see src/lib/ai/copilot.test.ts, "injected
+// callModel seam"):
+//   generateSuggestion(ctx, { callModel: async () => { throw ... } })  → fallback
+//   generateSuggestion(ctx, { callModel: async () => validResult })    → source "ai"
+//   generateSuggestion(ctx, { callModel: async () => invalidShape })   → fallback
+//
+// Production injects nothing: the provider is picked from env keys (OpenRouter or
+// Anthropic) and the real call model runs — see openRouterCallModel below.
 export type CallModel = (ctx: CopilotContext) => Promise<CopilotResult>;
 
 // The AI engine is provider-agnostic behind the CallModel seam. OpenRouter
@@ -139,12 +147,19 @@ const JSON_SHAPE_HINT = `Return ONLY a JSON object — no prose, no markdown cod
   "warnings": string[]
 }`;
 
+// Free-tier OpenRouter models can be slow (queued/rate-limited upstream), so allow
+// up to 5 minutes before aborting; on timeout the call rejects → deterministic
+// fallback. Keep in sync with the route's `maxDuration` (see api/ai/copilot/route).
+const OPENROUTER_TIMEOUT_MS = 5 * 60 * 1000;
+
 // OpenRouter — OpenAI-compatible Chat Completions. Uses fetch (no SDK) so the
 // fallback-only path stays dependency-free. JSON mode + prompt-described shape,
 // then validated by copilotResultSchema in generateSuggestion (invalid → fallback).
 const openRouterCallModel: CallModel = async (ctx) => {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
+    // Abort (→ fallback) if the upstream model hasn't responded within 5 minutes.
+    signal: AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${process.env.OPENROUTER_API_KEY ?? ""}`,
       "Content-Type": "application/json",
