@@ -18,6 +18,7 @@ import {
   suggestionReviewSchema,
   taskSchema,
 } from "@/lib/validation";
+import { copilotResultSchema, clampScore } from "@/lib/ai/schema";
 import type { Stage } from "@prisma/client";
 
 async function leadAccess(user: SessionUser, leadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -55,9 +56,10 @@ export async function moveLeadStage(leadId: string, nextStage: Stage): Promise<M
 export type ReviewResult = { ok: true } | { ok: false; error: string };
 
 // The suggestion → commit boundary: a human accepts or rejects an AiSuggestion.
-// This only transitions status — it never auto-applies the suggestion (e.g. a
-// recommended stage move stays a manual action), per the SKILL.md contract that
-// suggestions are proposals, not instructions.
+// Accepting is the approval that applies the suggestion's qualification *score* to
+// the lead (with an audit Activity). The recommended STAGE deliberately stays a
+// manual move, per the SKILL.md contract that suggestions are proposals — but the
+// score is an AI/rule-derived metric the accept is meant to commit.
 export async function reviewSuggestion(
   id: string,
   decision: "ACCEPTED" | "REJECTED",
@@ -72,12 +74,37 @@ export async function reviewSuggestion(
 
   const sug = await prisma.aiSuggestion.findUnique({
     where: { id },
-    select: { leadId: true, status: true, lead: { select: { ownerId: true } } },
+    select: { leadId: true, status: true, payload: true, lead: { select: { ownerId: true } } },
   });
   if (!sug) return { ok: false, error: "Suggestion not found" };
   if (!canAccessLead(user, sug.lead.ownerId)) return { ok: false, error: "Forbidden" };
   if (sug.status !== "SUGGESTED") return { ok: false, error: "Suggestion already reviewed" };
 
+  // On accept, write the suggested score (+ reasons) onto the lead and log it.
+  if (decision === "ACCEPTED") {
+    const scored = copilotResultSchema.safeParse(sug.payload);
+    const nextScore = scored.success ? clampScore(scored.data.qualification.score) : null;
+    if (scored.success && nextScore != null) {
+      const reason = scored.data.qualification.reasons.join(" · ") || scored.data.summary.overview;
+      await prisma.$transaction([
+        prisma.aiSuggestion.update({ where: { id }, data: { status: decision } }),
+        prisma.lead.update({ where: { id: sug.leadId }, data: { score: nextScore, scoreReason: reason } }),
+        prisma.activity.create({
+          data: {
+            leadId: sug.leadId,
+            userId: user.id,
+            type: "AI_SUGGESTION",
+            body: `AI qualification score applied: ${nextScore}.`,
+            metadata: { kind: "AI_SCORE_APPLIED", score: nextScore, suggestionId: id },
+          },
+        }),
+      ]);
+      revalidatePath(`/leads/${sug.leadId}`);
+      return { ok: true };
+    }
+  }
+
+  // Reject, or accept a suggestion with no usable score → status transition only.
   await prisma.aiSuggestion.update({ where: { id }, data: { status: decision } });
   revalidatePath(`/leads/${sug.leadId}`);
   return { ok: true };
@@ -152,6 +179,32 @@ export async function approveAndSendLineMessage(messageId: string): Promise<Send
   if (!res.ok) return { ok: false, error: res.error };
 
   revalidatePath(`/leads/${res.leadId}`);
+  return { ok: true };
+}
+
+// Discard an unsent LINE draft (DRAFT or FAILED). Sent messages are immutable
+// timeline records and cannot be deleted here — only outbound drafts that never
+// went out. Owner/manager-guarded like the send path.
+export async function deleteLineDraft(messageId: string): Promise<SendLineDraftActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Unauthorized" };
+
+  const parsedId = crmEntityIdSchema.safeParse(messageId);
+  if (!parsedId.success) return { ok: false, error: parsedId.error.issues[0]?.message ?? "Invalid message id" };
+  messageId = parsedId.data;
+
+  const message = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: { status: true, channel: true, direction: true, leadId: true, lead: { select: { ownerId: true } } },
+  });
+  if (!message) return { ok: false, error: "Message not found" };
+  if (!message.lead || !canAccessLead(user, message.lead.ownerId)) return { ok: false, error: "Forbidden" };
+  if (message.channel !== "LINE" || message.direction !== "OUT" || (message.status !== "DRAFT" && message.status !== "FAILED")) {
+    return { ok: false, error: "Only unsent LINE drafts can be deleted" };
+  }
+
+  await prisma.message.delete({ where: { id: messageId } });
+  if (message.leadId) revalidatePath(`/leads/${message.leadId}`);
   return { ok: true };
 }
 

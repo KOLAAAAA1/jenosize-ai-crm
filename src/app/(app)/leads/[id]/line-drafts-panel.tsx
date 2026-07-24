@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { approveAndSendLineMessage } from "../actions";
+import { approveAndSendLineMessage, deleteLineDraft } from "../actions";
 
 export type PendingLineDraft = {
   id: string;
@@ -19,6 +19,18 @@ export function LineDraftsPanel({ drafts }: { drafts: PendingLineDraft[] }) {
     setError(null);
     startTransition(async () => {
       const res = await approveAndSendLineMessage(messageId);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function remove(messageId: string) {
+    setError(null);
+    startTransition(async () => {
+      const res = await deleteLineDraft(messageId);
       if (!res.ok) {
         setError(res.error);
         return;
@@ -44,13 +56,22 @@ export function LineDraftsPanel({ drafts }: { drafts: PendingLineDraft[] }) {
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
                 {draft.status}
               </span>
-              <button
-                onClick={() => send(draft.id)}
-                disabled={pending}
-                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
-              >
-                {draft.status === "FAILED" ? "Retry send" : "Approve & send"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => remove(draft.id)}
+                  disabled={pending}
+                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-100 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => send(draft.id)}
+                  disabled={pending}
+                  className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
+                >
+                  {draft.status === "FAILED" ? "Retry send" : "Approve & send"}
+                </button>
+              </div>
             </div>
             <p className="whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">{draft.body}</p>
           </li>
