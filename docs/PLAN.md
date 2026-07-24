@@ -310,7 +310,7 @@ Items deliberately deferred — captured here so they aren't lost, none required
 | # | Feature | Why it's must-have | Minimal scope (build only this) | Deliberately NOT |
 |---|---|---|---|---|
 | 1 | **Tasks & follow-up reminders** | Reps' top pain — without it, leads silently fall through the cracks | One `Task` table (`title`, `dueAt`, `leadId`, `ownerId`, `status: OPEN\|DONE`); show open tasks on lead detail + a "My tasks due" list filtered by date | No recurring tasks, no push/email notification engine, no calendar sync — just a due-date filter |
-| 2 | **Basic reporting dashboard** | Managers won't roll out a CRM they can't measure; unlocks the 20-person team | 3–4 read-only aggregates on the existing Dashboard page — leads by stage (funnel), win rate, pipeline value, activities this week — via Prisma `groupBy` | No custom report builder, no BI tool, no scheduled exports, no per-user drill-down |
+| 2 | **Basic reporting dashboard — ✅ Shipped** | Managers won't roll out a CRM they can't measure; unlocks the 20-person team | Dashboard now provides scoped summary cards (including open pipeline value, win rate, and seven-day activity), plus independently filterable report cards. Each uses a compact filter tray with active-filter chips and reset (person, lead-created month, company, pipeline stage): a six-month lead-creation line chart, pipeline-value bar chart, monthly stacked horizontal stage-value chart, and stage-distribution donut chart | No custom report builder, no BI tool, no scheduled exports, no per-user drill-down |
 | 3 | **Global search** | Reps need to pull up a contact/lead in seconds, not page through lists | One top-bar box → matches name / company / phone / email across Contacts + Leads + Companies, reusing existing query filters | No fuzzy matching, no Elasticsearch, no search-as-you-type infra — a simple `contains` query |
 | 4 | **Won/Lost reason capture** | Tiny to add, but essential for pipeline hygiene and honest forecasting | On move to `WON`/`LOST`, capture a short reason (enum + optional note) into the existing stage-change `Activity` | No separate analytics module — the reason just rides on the Activity already being written |
 
@@ -399,7 +399,7 @@ Full picture of what a sales CRM offers, scored against this MVP — so the defe
 - ➕ Quote/proposal (CPQ) + e-signature · ➕ Product & pricing catalog · ➕ Mobile app · ➕ Smart notifications
 
 **Reporting & Analytics**
-- ◐ Dashboard page exists (basic)
+- ✅ Dashboard: scoped summary cards, seven-day activity, and independently filterable reports with compact filter trays, active chips, and reset (person/month/company/stage): lead-creation trend, pipeline value by stage, monthly stacked stage value, and stage distribution
 - ➕ Pipeline conversion / win-rate / activity reports · ➕ Quota & goal tracking · ➕ Leaderboards · ➕ Forecast reports
 
 **Collaboration, Access & Admin**
@@ -413,7 +413,7 @@ Ranked by rep/manager value ÷ build cost. P0 = must-haves from §11.1 (start he
 | Priority | Feature | Status | Effort | Why this rank |
 |---|---|---|---|---|
 | **P0** | Tasks & follow-up reminders | ✅ | S | **Shipped** (§11.2) — completes the daily rep loop |
-| **P0** | Basic reporting dashboard | ◐ | S | Managers won't adopt what they can't measure (20-person team) |
+| **P0** | Basic reporting dashboard | ✅ | S | Shipped — scoped summary cards (including seven-day activity) plus independently filterable line, bar, stacked horizontal bar, and donut charts with compact filter trays |
 | **P0** | Global search | ➕ | S | Seconds-to-find a contact/lead; thin `contains` query |
 | **P0** | Won/Lost reason capture | ➕ | XS | Pipeline hygiene + honest forecasting; rides existing Activity |
 | **P1** | Deal fields (probability %, close date) | ✅ | S | Shipped — editable probability + expected close date, with immutable audit Activity |
