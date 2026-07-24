@@ -30,3 +30,17 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Prevent iOS/mobile auto-zoom on input focus: mobile Safari zooms the viewport
+   whenever a focused form control's font-size is under 16px (our inputs use
+   Tailwind's text-sm = 14px). Bump form controls to 16px on touch/tablet-sized
+   viewports (≤ lg) only, so desktop keeps its compact sizing. Unlayered on
+   purpose — it wins over the `.text-sm` utility (in Tailwind's utilities layer)
+   without needing !important. */
+@media (max-width: 1024px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
