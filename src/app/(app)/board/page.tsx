@@ -44,7 +44,9 @@ export default async function BoardPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Pipeline</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Drag a lead between stages to update it. {leads.length.toLocaleString()} lead
+          <span className="lg:hidden">Swipe across stages, then use Move to on a card to update it. </span>
+          <span className="hidden lg:inline">Drag a lead between stages to update it. </span>
+          {leads.length.toLocaleString()} lead
           {leads.length === 1 ? "" : "s"} shown.
         </p>
       </div>

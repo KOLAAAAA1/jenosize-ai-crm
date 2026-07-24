@@ -3,7 +3,7 @@
 import { useOptimistic, useState, useTransition } from "react";
 import Link from "next/link";
 import type { Stage } from "@prisma/client";
-import { STAGE_META } from "@/lib/crm";
+import { STAGE_META, STAGES } from "@/lib/crm";
 import { formatTHB } from "@/lib/format";
 import { groupLeadsByStage, type BoardLead } from "@/lib/pipeline";
 import { moveLeadStage } from "../leads/actions";
@@ -28,14 +28,9 @@ export function PipelineBoard({ leads }: { leads: BoardLead[] }) {
 
   const columns = groupLeadsByStage(optimisticLeads);
 
-  function onDrop(nextStage: Stage) {
-    const id = dragId;
-    setDragId(null);
-    setOverStage(null);
-    if (!id) return;
-
+  function moveLead(id: string, nextStage: Stage) {
     const lead = optimisticLeads.find((l) => l.id === id);
-    if (!lead || lead.stage === nextStage) return; // no-op drop
+    if (!lead || lead.stage === nextStage) return; // no-op move
 
     setError(null);
     startTransition(async () => {
@@ -45,15 +40,26 @@ export function PipelineBoard({ leads }: { leads: BoardLead[] }) {
     });
   }
 
+  function onDrop(nextStage: Stage) {
+    const id = dragId;
+    setDragId(null);
+    setOverStage(null);
+    if (!id) return;
+    moveLead(id, nextStage);
+  }
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="grid gap-3">
       {error && (
         <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
           Could not move lead: {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div
+        aria-label="Pipeline stages"
+        className="-mx-4 grid auto-cols-[calc(100vw-3rem)] grid-flow-col snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-3 [-webkit-overflow-scrolling:touch] sm:auto-cols-[20rem] lg:mx-0 lg:auto-cols-[17rem] lg:px-0"
+      >
         {columns.map((col) => {
           const meta = STAGE_META[col.stage];
           const isTarget = overStage === col.stage;
@@ -71,11 +77,10 @@ export function PipelineBoard({ leads }: { leads: BoardLead[] }) {
                 }
               }}
               onDrop={() => onDrop(col.stage)}
-              className={`flex min-h-[8rem] flex-col gap-2 rounded-xl border p-2.5 transition ${
-                isTarget
+              className={`grid min-h-[8rem] min-w-[calc(100vw-3rem)] content-start snap-center gap-2 rounded-xl border p-2.5 transition sm:min-w-[20rem] lg:min-w-0 ${isTarget
                   ? "border-indigo-400 bg-indigo-50/60 dark:border-indigo-600 dark:bg-indigo-950/30"
                   : "border-zinc-200 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-900/40"
-              }`}
+                }`}
             >
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
@@ -88,7 +93,7 @@ export function PipelineBoard({ leads }: { leads: BoardLead[] }) {
                 {formatTHB(col.totalValue)}
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="grid content-start gap-3">
                 {col.leads.map((lead) => (
                   <article
                     key={lead.id}
@@ -98,33 +103,47 @@ export function PipelineBoard({ leads }: { leads: BoardLead[] }) {
                       setDragId(null);
                       setOverStage(null);
                     }}
-                    className={`cursor-grab rounded-lg border border-zinc-200 bg-white p-2.5 shadow-sm transition active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${
-                      dragId === lead.id ? "opacity-50" : ""
-                    } ${pending ? "pointer-events-none" : ""}`}
+                    className={`h-36 w-full overflow-hidden rounded-lg border border-zinc-200 bg-white p-2.5 shadow-sm transition lg:h-28 lg:cursor-grab lg:active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-900 ${dragId === lead.id ? "opacity-50" : ""
+                      } ${pending ? "pointer-events-none" : ""}`}
                   >
                     <Link
                       href={`/leads/${lead.id}`}
                       draggable={false}
-                      className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                      className="block truncate text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
                     >
                       {lead.title}
                     </Link>
-                    <div className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                    <div title={`${lead.companyName} · ${lead.contactName}`} className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
                       {lead.companyName} · {lead.contactName}
                     </div>
-                    <div className="mt-1.5 flex items-center justify-between">
-                      <span className="text-xs tabular-nums text-zinc-700 dark:text-zinc-300">
+                    <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2">
+                      <span className="shrink-0 text-xs tabular-nums text-zinc-700 dark:text-zinc-300">
                         {formatTHB(lead.valueTHB)}
                       </span>
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                      <span className="min-w-0 flex-1 truncate text-right text-xs text-zinc-400 dark:text-zinc-500">
                         {lead.ownerName}
                         {lead.score != null ? ` · ${lead.score}` : ""}
                       </span>
                     </div>
+                    <label className="mt-3 flex items-center gap-2 lg:hidden">
+                      <span className="shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400">Move to</span>
+                      <select
+                        aria-label={`Move ${lead.title} to stage`}
+                        value={lead.stage}
+                        disabled={pending}
+                        onChange={(event) => moveLead(lead.id, event.target.value as Stage)}
+                        className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+                      >
+                        {STAGES.map((stage) => <option key={stage} value={stage}>{STAGE_META[stage].label}</option>)}
+                      </select>
+                    </label>
                   </article>
                 ))}
                 {col.leads.length === 0 && (
-                  <p className="px-1 py-4 text-center text-xs text-zinc-400 dark:text-zinc-600">Drop leads here</p>
+                  <p className="px-1 py-4 text-center text-xs text-zinc-400 dark:text-zinc-600">
+                    <span className="lg:hidden">No leads in this stage</span>
+                    <span className="hidden lg:inline">Drop leads here</span>
+                  </p>
                 )}
               </div>
             </section>

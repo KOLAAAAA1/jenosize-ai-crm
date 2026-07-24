@@ -49,12 +49,12 @@ export function AppHeader({ user }: { user: SessionUser }) {
 
   const desktopLink = (active: boolean) =>
     active
-      ? "rounded-lg px-2 py-1 text-sm font-medium text-zinc-900 dark:text-zinc-50"
+      ? "rounded-lg px-2 py-1 text-sm font-bold text-zinc-900 dark:text-zinc-50"
       : "rounded-lg px-2 py-1 text-sm text-zinc-600 transition hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100";
 
   const drawerLink = (active: boolean) =>
     active
-      ? "rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
+      ? "rounded-lg bg-zinc-100 px-3 py-2 text-sm font-bold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
       : "rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100";
 
   return (
@@ -75,7 +75,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
         </div>
 
         {/* Right — theme toggle + profile + sign out (desktop) */}
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex">
           <div className="min-w-0 text-right">
             <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">{user.name}</p>
             <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
