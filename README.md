@@ -424,4 +424,3 @@ Production next steps:
 - [`docs/architecture.html`](docs/architecture.html) — interactive architecture & data-flow diagram
 - [`docs/AI_USAGE_LOG.md`](docs/AI_USAGE_LOG.md) — sample AI tasks, human review notes, rejected output, verification record
 - [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) — deploy prerequisites, smoke test checklist, final package checklist
-- [`docs/WALKTHROUGH_SCRIPT.md`](docs/WALKTHROUGH_SCRIPT.md) — 3-5 minute demo recording outline
