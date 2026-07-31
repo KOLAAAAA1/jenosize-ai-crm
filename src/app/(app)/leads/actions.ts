@@ -134,9 +134,14 @@ export async function saveLineDraft(id: string): Promise<SaveLineDraftActionResu
   return { ok: true };
 }
 
-// Manual compose (Block 9): a rep writes a LINE reply → Message(DRAFT), which then
-// flows through the existing approve→send path. Owner/manager-guarded.
-export async function createLineDraft(leadId: string, body: string): Promise<SaveLineDraftActionResult> {
+// The manual half of the chat box: a rep types a reply and sends it in one action,
+// which is only reachable while AI auto-reply is switched OFF for the contact.
+//
+// It is still the audited two-step underneath — saveLineDraftManual writes the
+// Message(DRAFT) + Activity, then approveAndSendLineDraft performs the send with its
+// retry-key idempotency and OPTED_OUT checks. Sending a chat message *is* the human
+// approval here, so the two steps are collapsed into one click rather than skipped.
+export async function sendLineChatMessage(leadId: string, body: string): Promise<SendLineDraftActionResult> {
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "Unauthorized" };
 
@@ -151,10 +156,42 @@ export async function createLineDraft(leadId: string, body: string): Promise<Sav
   if (!lead) return { ok: false, error: "Lead not found" };
   if (!canAccessLead(user, lead.ownerId)) return { ok: false, error: "Forbidden" };
 
-  const res = await saveLineDraftManual(prisma, leadId, parsed.data.body, user.id);
-  if (!res.ok) return { ok: false, error: res.error };
+  const draft = await saveLineDraftManual(prisma, leadId, parsed.data.body, user.id);
+  if (!draft.ok) return { ok: false, error: draft.error };
 
-  revalidatePath(`/leads/${res.leadId}`);
+  const sent = await approveAndSendLineDraft(prisma, draft.messageId, user.id);
+  revalidatePath(`/leads/${leadId}`);
+  // The draft survives a failed send as a FAILED row in the LINE drafts panel, so
+  // the text is never lost — the rep can retry from there.
+  if (!sent.ok) return { ok: false, error: sent.error };
+  return { ok: true };
+}
+
+// The AI auto-reply switch, as flipped from the lead's chat box. Stored on the
+// Contact (the OA talks to a person, not to a deal), but authorised by LEAD access
+// so the assigned sales rep can use it — `setContactAutoReply` on the contact page
+// is admin/manager-only and would lock reps out of their own conversations.
+export async function setLeadAiAutoReply(leadId: string, enabled: boolean): Promise<SendLineDraftActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Unauthorized" };
+
+  const parsedId = crmEntityIdSchema.safeParse(leadId);
+  if (!parsedId.success) return { ok: false, error: parsedId.error.issues[0]?.message ?? "Invalid lead id" };
+  leadId = parsedId.data;
+  if (typeof enabled !== "boolean") return { ok: false, error: "Invalid switch value" };
+
+  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { ownerId: true, contactId: true } });
+  if (!lead) return { ok: false, error: "Lead not found" };
+  if (!canAccessLead(user, lead.ownerId)) return { ok: false, error: "Forbidden" };
+
+  try {
+    await prisma.contact.update({ where: { id: lead.contactId }, data: { autoReplyEnabled: enabled } });
+  } catch {
+    return { ok: false, error: "Could not update AI auto-reply." };
+  }
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath(`/contacts/${lead.contactId}`);
   return { ok: true };
 }
 

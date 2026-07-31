@@ -8,12 +8,12 @@ import { formatDateTime, formatTHB, timeAgo } from "@/lib/format";
 import { StageMover } from "./stage-mover";
 import { CopilotPanel, type PendingSuggestion } from "./copilot-panel";
 import { LineDraftsPanel, type PendingLineDraft } from "./line-drafts-panel";
-import { LineCompose } from "./line-compose";
 import { ChatHistory, type ChatMessage } from "./chat-history";
 import { TasksPanel, type LeadTask } from "./tasks-panel";
 import { DealFieldsPanel } from "./deal-fields-panel";
 import { OwnerAssigner } from "./owner-assigner";
 import { copilotResultSchema, type CopilotSuggestion } from "@/lib/ai/schema";
+import { isAutoReplyMessage } from "@/lib/line/ai-autoreply";
 import type { MessageChannel } from "@prisma/client";
 
 type TimelineItem =
@@ -72,9 +72,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   }));
 
   // LINE conversation as a chat thread (oldest → newest) — handover evidence.
+  // `via` reads the AI auto-reply's own idempotency marker on providerMessageId
+  // (see lib/line/ai-autoreply), so an AI reply is never shown as the rep's words.
   const chatMessages: ChatMessage[] = lead.messages
     .filter((m) => m.channel === "LINE")
-    .map((m) => ({ id: m.id, direction: m.direction, status: m.status, body: m.body, at: m.createdAt }))
+    .map((m) => ({
+      id: m.id,
+      direction: m.direction,
+      status: m.status,
+      body: m.body,
+      at: m.createdAt,
+      via: isAutoReplyMessage(m.providerMessageId) ? ("ai" as const) : ("human" as const),
+    }))
     .sort((a, b) => a.at.getTime() - b.at.getTime());
 
   const timeline: TimelineItem[] = [
@@ -165,18 +174,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             expectedCloseAt={lead.expectedCloseAt?.toISOString() ?? null}
           />
 
-          <div className="mt-4">
-            <CopilotPanel leadId={lead.id} suggestions={pendingSuggestions} />
-          </div>
-
-          <div className="mt-4">
-            <LineCompose leadId={lead.id} lineLinked={lead.contact.lineUserId != null} optedOut={lead.contact.consentStatus === "OPTED_OUT"} />
-          </div>
-
-          <div className="mt-4">
-            <LineDraftsPanel drafts={pendingLineDrafts} />
-          </div>
-
           {/* Email compose/send is a deferred enhancement (see docs/BACKLOG.md);
               the panel is hidden from the lead detail. Backend seam stays intact. */}
 
@@ -187,7 +184,19 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
         {/* Conversation + Timeline */}
         <section className="lg:col-span-2 flex flex-col gap-6">
-          <ChatHistory messages={chatMessages} contactName={contactName(lead.contact)} ownerName={lead.owner.name} />
+          {/* The chat box is the single place the conversation is read AND acted on:
+              copilot suggestions, the thread, pending drafts, and the composer. */}
+          <ChatHistory
+            messages={chatMessages}
+            contactName={contactName(lead.contact)}
+            ownerName={lead.owner.name}
+            leadId={lead.id}
+            aiAutoReplyEnabled={lead.contact.autoReplyEnabled}
+            lineLinked={lead.contact.lineUserId != null}
+            optedOut={lead.contact.consentStatus === "OPTED_OUT"}
+            copilot={<CopilotPanel leadId={lead.id} suggestions={pendingSuggestions} />}
+            drafts={<LineDraftsPanel drafts={pendingLineDrafts} />}
+          />
 
           <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">

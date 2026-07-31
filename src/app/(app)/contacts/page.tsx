@@ -96,7 +96,9 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
                 <td className="px-4 py-3">
                   <div className="flex flex-col items-start gap-1">
                     {c.lineUserId ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Linked</span> : <span className="text-zinc-400">—</span>}
-                    {c.autoReplyEnabled && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:bg-violet-950 dark:text-violet-300">Auto-reply</span>}
+                    {/* AI auto-reply is on by default, so the exception is what's
+                        worth a badge: this customer is answered by a human. */}
+                    {c.lineUserId && !c.autoReplyEnabled && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:bg-violet-950 dark:text-violet-300">AI off</span>}
                   </div>
                 </td>
                 <td className="px-4 py-3">

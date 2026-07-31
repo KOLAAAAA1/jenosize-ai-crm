@@ -6,7 +6,9 @@ import { signSession, verifyPassword, SESSION_COOKIE, sessionCookieOptions } fro
 // bcrypt + Prisma (pg adapter) require the Node.js runtime.
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+export const POST = login;
+
+async function login(req: Request) {
   const body = await req.json().catch(() => null);
   const parsed = loginSchema.safeParse(body);
   if (!parsed.success) {

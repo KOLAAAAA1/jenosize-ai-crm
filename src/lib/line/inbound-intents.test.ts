@@ -71,8 +71,12 @@ describe("handleInboundIntents", () => {
     const lead = await prisma.lead.create({ data: { title: "existing", companyId, contactId: contact.id, ownerId, source: "LINE_OA", stage: "NEW" }, select: { id: true } });
     const reply = okReply();
 
-    const r = await handleInboundIntents(prisma, body(U("team"), CONTACT_TEAM_KEYWORD), { reply, resolveOwnerId: resolveOwner });
+    const payload = body(U("team"), CONTACT_TEAM_KEYWORD);
+    const r = await handleInboundIntents(prisma, payload, { reply, resolveOwnerId: resolveOwner });
     expect(r.replied).toBe(1);
+    // The message is claimed, so the AI auto-reply that runs next stays quiet
+    // instead of answering on top of the canned acknowledgement.
+    expect(r.handledMessageIds).toEqual([JSON.parse(payload).events[0].message.id]);
     expect((reply.mock.calls[0] as unknown as [{ text: string }])[0].text).toMatch(/รับเรื่องแล้ว/);
     const acts = await prisma.activity.findMany({ where: { leadId: lead.id, type: "NOTE" } });
     expect(acts.some((a) => /ติดต่อกลับ/.test(a.body))).toBe(true);
@@ -128,7 +132,9 @@ describe("handleInboundIntents", () => {
     if (!dbOk) ctx.skip();
     const reply = okReply();
     const r = await handleInboundIntents(prisma, body(U("unknown_zzz"), CONTACT_TEAM_KEYWORD), { reply, resolveOwnerId: resolveOwner });
-    expect(r).toEqual({ replied: 0, leadsCreated: 0 });
+    // Unhandled: an unmapped user is nobody's message — the AI auto-reply skips it
+    // for the same reason (no Contact → no toggle, no consent state).
+    expect(r).toEqual({ replied: 0, leadsCreated: 0, handledMessageIds: [] });
     expect(reply).not.toHaveBeenCalled();
   });
 });

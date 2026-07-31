@@ -10,7 +10,9 @@ import { findLiffContact } from "@/lib/line/liff-register";
 // client-sent userId). Read-only. Node runtime for Prisma.
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+export const POST = liffStatus;
+
+async function liffStatus(req: Request) {
   const channelId = loginChannelId();
   if (!channelId) return NextResponse.json({ error: "LIFF is not configured on the server." }, { status: 500 });
 

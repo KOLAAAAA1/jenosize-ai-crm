@@ -25,7 +25,7 @@ All handlers run on the Node runtime (Prisma) and validate input with Zod. Bodie
 ### LINE
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `POST` | `/api/line/webhook` | **LINE signature** | Verifies `X-Line-Signature` (HMAC-SHA256) on the **raw body before parse** → 401 + `WebhookEvent(INVALID)` on mismatch. Idempotent on event/message id. Maps user → Contact/Lead, persists inbound `Message(RECEIVED)` + `LINE_IN` Activity; handles `follow`/`unfollow` and per-contact greeting auto-reply. Always returns 200 on accepted events (best-effort side effects never 500). |
+| `POST` | `/api/line/webhook` | **LINE signature** | Verifies `X-Line-Signature` (HMAC-SHA256) on the **raw body before parse** → 401 + `WebhookEvent(INVALID)` on mismatch. Idempotent on event/message id. Maps user → Contact/Lead, persists inbound `Message(RECEIVED)` + `LINE_IN` Activity; handles `follow`/`unfollow`, keyword automation, and the per-contact **AI auto-reply** (generates + pushes the reply, persisting `Message(OUT)` + `Activity`). Always returns 200 on accepted events (best-effort side effects never 500). |
 | `POST` | `/api/line/liff-register` | **LIFF ID token** | Body `{ idToken, firstName, lastName, email?, phone?, consent }`. Server-side verifies the ID token (trusts only `sub`), upserts a Contact on `lineUserId` under the sentinel company. 401 on unverifiable token; 400 on invalid form. |
 | `POST` | `/api/line/liff-connect` | **LIFF ID token + signed link token** | Body `{ idToken, token, consent }`. Verifies both tokens, binds the verified `lineUserId` to the `contactId` inside the signed token. Returns `{ ok, outcome: "linked"|"already_linked"|"relinked_from_sentinel" }`, or 401 (bad/expired token), 404 (contact gone), 409 (LINE user linked elsewhere / contact already linked to a different user). |
 
@@ -42,8 +42,8 @@ All handlers run on the Node runtime (Prisma) and validate input with Zod. Bodie
 
 Guarded (`getSessionUser` + role checks via `access-control.ts`), Zod-validated, `revalidatePath` on success. Key actions:
 
-- **Leads:** `moveLeadStage` (atomic stage move + `STAGE_CHANGE` Activity), deal-field edits (probability/close date + audit Activity), owner assignment (`changeLeadOwner`, manager/admin), `createTask` / `toggleTaskDone`, LINE draft generate/approve/send, email draft actions (deferred — [02_FSD §7](02_FSD.md)).
-- **Contacts:** `saveContact` (create/edit), `setContactAutoReply` (greeting toggle), `createContactLineConnectLink` (mint a signed LIFF connect link/QR for account linking; manager/admin).
+- **Leads:** `moveLeadStage` (atomic stage move + `STAGE_CHANGE` Activity), deal-field edits (probability/close date + audit Activity), owner assignment (`changeLeadOwner`, manager/admin), `createTask` / `toggleTaskDone`, LINE draft generate/approve/send, `sendLineChatMessage` (type-and-send from the chat box: draft + approve + send in one action), `setLeadAiAutoReply` (AI auto-reply switch, lead-scoped so the assigned rep can flip it), email draft actions (deferred — [02_FSD §7](02_FSD.md)).
+- **Contacts:** `saveContact` (create/edit), `setContactAutoReply` (AI auto-reply switch; admin/manager), `createContactLineConnectLink` (mint a signed LIFF connect link/QR for account linking; manager/admin).
 - **Companies/Contacts CRUD** via their forms.
 
 ---

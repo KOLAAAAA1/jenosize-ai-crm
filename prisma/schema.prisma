@@ -117,9 +117,10 @@ model User {
   passwordHash String
   createdAt    DateTime @default(now())
 
-  ownedLeads Lead[]     @relation("LeadOwner")
-  activities Activity[]
-  tasks      Task[]
+  ownedLeads   Lead[]        @relation("LeadOwner")
+  activities   Activity[]
+  tasks        Task[]
+  activityLogs ActivityLog[]
 }
 
 model Company {
@@ -145,10 +146,11 @@ model Contact {
   title      String?
   lineUserId String? @unique // LINE → CRM mapping key
   consentStatus ConsentStatus @default(UNKNOWN)
-  // Per-contact greeting auto-reply toggle (sale/admin controls it on the contact
-  // page). Default false = OA never auto-replies to this customer. Separate from
-  // the AI copilot, which is unaffected. See src/lib/line/autoreply.ts.
-  autoReplyEnabled Boolean @default(false)
+  // Per-contact AI auto-reply switch (sale/admin flips it on the lead's chat box or
+  // the contact page). Default TRUE: an inbound LINE message is answered by the AI
+  // automatically. Switched off, the OA stays silent and a rep replies by hand from
+  // the chat box. See src/lib/line/ai-autoreply.ts.
+  autoReplyEnabled Boolean @default(true)
   // Set when the customer taps "ask for more info" on the rich menu; their next
   // message is captured into a Lead and this is cleared (PLAN §5).
   pendingIntent PendingIntent?
@@ -287,4 +289,37 @@ model WebhookEvent {
   createdAt       DateTime      @default(now())
 
   @@index([status])
+}
+
+// Audit trail for HTTP API traffic only (src/app/api/**). Server Actions and page
+// navigations are deliberately NOT recorded here — this table answers "what hit the
+// API", not "what did a user click". Written after the response via `after()`, so a
+// logging failure can never turn a good request into a 500.
+//
+// `Activity` above is the CRM-domain timeline (calls, notes, stage moves) — a
+// different concept that happens to share a word; hence the distinct model name.
+model ActivityLog {
+  id     String @id @default(cuid())
+  kind   String @default("api") // "api" = request to /api/**; "page" = a page view
+  path   String // pathname only, e.g. /api/ai/copilot (never the full URL)
+  method String
+  query      Json? // parsed search params, redacted
+  payload    Json? // JSON request body, redacted + size-capped; null for GET
+  // Null since the switch to proxy-based logging: Next's proxy runs *before* the
+  // route handler and has no continuation hook, so the response is never visible to
+  // it. Rows written by the old per-route withApiLog wrapper still carry values.
+  statusCode Int?
+  durationMs Int?
+  userId     String? // null for public/unauthenticated endpoints (LINE, LIFF, login)
+  ipAddress  String?
+  userAgent  String?
+  device     String? // derived from the user agent: desktop | mobile | tablet | bot
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([path])
+  @@index([kind])
 }

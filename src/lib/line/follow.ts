@@ -5,9 +5,10 @@ import { logger } from "@/lib/logger";
 
 // LINE friend-add / block lifecycle (PLAN §11.4 step 4):
 //  - follow   → welcome NEW followers with the LIFF self-registration link.
-//               Gated to "no Contact yet" so it never contends with the
-//               per-contact greeting auto-reply for the single-use replyToken
-//               (auto-reply only fires for EXISTING opted-in contacts).
+//               Gated to "no Contact yet" so a known contact who re-adds the OA
+//               isn't sent the registration link again. No contention with the AI
+//               auto-reply: that path handles text messages only, and pushes rather
+//               than competing for this single-use replyToken.
 //  - unfollow → set the matched Contact to OPTED_OUT (they blocked the OA) —
 //               PDPA hygiene; outbound already refuses OPTED_OUT. No replyToken.
 //

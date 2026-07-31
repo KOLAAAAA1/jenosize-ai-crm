@@ -30,7 +30,7 @@ flowchart TD
 
     subgraph BACKEND["Backend services"]
         SKILL["crm-copilot skill → Claude API<br/>summary · score · next-best action · draft reply<br/>fallback: deterministic scorer"]
-        DB[("Prisma → PostgreSQL · Neon<br/>9 tables · migrations · idempotency constraints")]
+        DB[("Prisma → PostgreSQL · Neon<br/>10 tables · migrations · idempotency constraints")]
     end
 
     UI -->|"fetch (Zod-typed)"| CRM

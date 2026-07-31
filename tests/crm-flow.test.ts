@@ -8,6 +8,8 @@ import { POST as lineWebhookPost } from "@/app/api/line/webhook/route";
 import { computeLineSignature } from "@/lib/line/signature";
 import { invalidWebhookEventId, reprocessFailedLineWebhook } from "@/lib/line/service";
 import { approveAndSendLineDraft, saveLineDraftFromAiSuggestion, saveLineDraftManual } from "@/lib/line/outbound";
+import { autoReplyProviderMessageId } from "@/lib/line/ai-autoreply";
+import { FALLBACK_REPLY_TEXT } from "@/lib/ai/chat-reply";
 
 // Part 3 required test #1: core CRM flow — create lead → move stage → activity logged.
 // Integration test against the local Postgres (run `pnpm db:up` first).
@@ -272,6 +274,20 @@ describe("Part 3 — LINE webhook security/idempotency", () => {
     expect(await prisma.webhookEvent.count({ where: { providerEventId: lineEventId } })).toBe(1);
     expect(await prisma.message.count({ where: { providerMessageId: lineMessageId } })).toBe(1);
     expect(await prisma.activity.count({ where: { leadId: ids.lineLead, type: "LINE_IN", body: { contains: "Please send the proposal" } } })).toBe(1);
+
+    // The AI auto-reply is wired into this route and is ON by default, so the
+    // inbound message is answered exactly once — the redelivery above must not
+    // produce a second reply to the customer. No provider key in the test env, so
+    // the text is the deterministic fallback (see vitest.setup.ts).
+    const aiReplies = await prisma.message.findMany({
+      where: { providerMessageId: autoReplyProviderMessageId(lineMessageId) },
+    });
+    expect(aiReplies).toHaveLength(1);
+    expect(aiReplies[0]).toMatchObject({ direction: "OUT", status: "SENT", leadId: ids.lineLead });
+    expect(aiReplies[0].body).toBe(FALLBACK_REPLY_TEXT);
+    expect(
+      await prisma.activity.count({ where: { leadId: ids.lineLead, type: "LINE_OUT", body: { contains: "AI auto-reply sent" } } }),
+    ).toBe(1);
   });
 
   it("AI LINE draft → human approval → mock send is audited", async (ctx) => {

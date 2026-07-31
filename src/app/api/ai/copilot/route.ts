@@ -16,7 +16,9 @@ export const maxDuration = 300;
 // POST /api/ai/copilot { leadId } → runs the copilot for one lead, persists the
 // result as an AiSuggestion(SUGGESTED), and returns it. Degrades to the
 // deterministic fallback automatically when the model is unavailable / unkeyed.
-export async function POST(req: Request) {
+export const POST = runCopilot;
+
+async function runCopilot(req: Request) {
   const user = await requireApiUser();
   if (user instanceof NextResponse) return user; // 401 for unauthenticated API callers
 

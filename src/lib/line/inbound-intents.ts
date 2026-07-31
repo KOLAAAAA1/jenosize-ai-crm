@@ -75,6 +75,11 @@ async function defaultOwnerId(db: Db): Promise<string | null> {
   return owner?.id ?? null;
 }
 
+// `handledMessageIds` lists the messages this handler owns — a matched keyword or a
+// captured inquiry. The AI auto-reply runs after this and skips those ids, so a
+// customer who taps a rich-menu button gets the canned acknowledgement only, not
+// that plus an AI reply. It is reported even when the canned reply itself failed or
+// was suppressed as a duplicate: this handler still owns the message either way.
 export async function handleInboundIntents(
   db: Db,
   rawBody: string,
@@ -82,15 +87,16 @@ export async function handleInboundIntents(
     reply?: ReplyFn;
     resolveOwnerId?: (db: Db) => Promise<string | null>;
   } = {}
-): Promise<{ replied: number; leadsCreated: number }> {
+): Promise<{ replied: number; leadsCreated: number; handledMessageIds: string[] }> {
   const parsed = parseLineWebhookPayload(rawBody);
-  if (!parsed.ok) return { replied: 0, leadsCreated: 0 };
+  if (!parsed.ok) return { replied: 0, leadsCreated: 0, handledMessageIds: [] };
 
   const reply = opts.reply ?? replyLineTextMessage;
   const resolveOwnerId = opts.resolveOwnerId ?? defaultOwnerId;
 
   let replied = 0;
   let leadsCreated = 0;
+  const handledMessageIds: string[] = [];
   for (const event of parsed.payload.events) {
     const msg = parseTextMessageEvent(event);
     if (!msg?.source.userId || !msg.replyToken) continue;
@@ -98,7 +104,11 @@ export async function handleInboundIntents(
       const r = await handleOne(db, msg, reply, resolveOwnerId);
       replied += r.replied;
       leadsCreated += r.leadsCreated;
+      if (r.handled) handledMessageIds.push(msg.message.id);
     } catch (err) {
+      // An intent that threw mid-way is still this handler's message — claiming it
+      // keeps the AI from answering on top of a half-finished intent.
+      handledMessageIds.push(msg.message.id);
       logger.warn('line.intents.error', {
         error: err instanceof Error ? err.message : 'unknown error',
       });
@@ -107,7 +117,7 @@ export async function handleInboundIntents(
 
   if (replied || leadsCreated)
     logger.info('line.intents.done', { replied, leadsCreated });
-  return { replied, leadsCreated };
+  return { replied, leadsCreated, handledMessageIds };
 }
 
 async function handleOne(
@@ -115,7 +125,7 @@ async function handleOne(
   msg: LineTextMessageEvent,
   reply: ReplyFn,
   resolveOwnerId: (db: Db) => Promise<string | null>
-): Promise<{ replied: number; leadsCreated: number }> {
+): Promise<{ replied: number; leadsCreated: number; handled: boolean }> {
   const userId = msg.source.userId!;
   const replyToken = msg.replyToken!;
   const isRedelivery = msg.deliveryContext?.isRedelivery ?? false;
@@ -129,15 +139,17 @@ async function handleOne(
       leads: { select: { id: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
     },
   });
-  if (!contact) return { replied: 0, leadsCreated: 0 };
+  if (!contact) return { replied: 0, leadsCreated: 0, handled: false };
 
   const intent = classifyIntent(msg.message.text, contact.pendingIntent);
   let leadsCreated = 0;
 
-  if (intent.kind === 'none') return { replied: 0, leadsCreated: 0 };
+  // Not an intent: the message falls through to the AI auto-reply.
+  if (intent.kind === 'none') return { replied: 0, leadsCreated: 0, handled: false };
 
   if (intent.kind === 'contact_team') {
-    if (isRedelivery) return { replied: 0, leadsCreated: 0 };
+    // Redelivery: already acknowledged once, and `handled` keeps the AI quiet too.
+    if (isRedelivery) return { replied: 0, leadsCreated: 0, handled: true };
     const leadId = contact.leads[0]?.id;
     if (leadId) {
       await db.activity.create({
@@ -160,7 +172,7 @@ async function handleOne(
     const ownerId = await resolveOwnerId(db);
     if (!ownerId) {
       logger.warn('line.intents.no_default_owner', {}); // leave pendingIntent set; nothing lost
-      return { replied: 0, leadsCreated: 0 };
+      return { replied: 0, leadsCreated: 0, handled: true };
     }
     const text = msg.message.text.trim();
     const created = await db.$transaction(async (tx) => {
@@ -192,7 +204,7 @@ async function handleOne(
       });
       return true;
     });
-    if (!created) return { replied: 0, leadsCreated: 0 }; // duplicate → no reply
+    if (!created) return { replied: 0, leadsCreated: 0, handled: true }; // duplicate → no reply
     leadsCreated = 1;
   }
 
@@ -206,5 +218,5 @@ async function handleOne(
       error: err instanceof Error ? err.message : 'unknown error',
     });
   }
-  return { replied, leadsCreated };
+  return { replied, leadsCreated, handled: true };
 }

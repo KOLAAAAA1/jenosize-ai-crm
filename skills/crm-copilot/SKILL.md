@@ -5,6 +5,7 @@ description: Reusable AI CRM copilot for lead summarization, qualification scori
 
 # CRM Copilot
 
+
 A reusable AI skill for supporting sales teams with lead understanding, qualification, follow-up planning, and LINE Official Account communication.
 
 The copilot may analyze CRM context and produce recommendations, but it must never silently change CRM records or send messages. All writes and outbound communications require an explicit confirmation step.
@@ -50,7 +51,7 @@ This skill is written as a **provider- and schema-agnostic contract** so it can 
 | `company.*` | `Company` | `id, name, industry, size, website, notes` |
 | `contact.role` | `Contact.title` | — |
 | `contact.line_user_id` | `Contact.lineUserId` | unique; the LINE→CRM mapping key |
-| `contact.consent_status` | `Contact.consentStatus` | enum `ConsentStatus`: `UNKNOWN · OPTED_IN · OPTED_OUT`, default `UNKNOWN`. Drives Eval Case 3 (opt-out); `UNKNOWN` is the safe default — still require approval for every outbound reply |
+| `contact.consent_status` | `Contact.consentStatus` | enum `ConsentStatus`: `UNKNOWN · OPTED_IN · OPTED_OUT`, default `UNKNOWN`. Drives Eval Case 3 (opt-out). `UNKNOWN` is the safe default for **outreach**: in the approval path every outbound reply still needs a human approval regardless of consent. It does **not** block the auto-reply mode, which only answers a message the customer just sent — replying to an inbound message is not outreach, and `OPTED_OUT` blocks it outright |
 | `activities[*]` | `Activity` | `type` enum `ActivityType`; immutable timeline |
 | `messages[*].direction` | `Message.direction` | enum `MessageDirection`: `IN · OUT` |
 | message delivery status | `Message.status` | enum `MessageStatus`: `RECEIVED · DRAFT · APPROVED · SENT · FAILED` |
@@ -376,7 +377,40 @@ The workflow must remain:
 5. Application sends through the LINE adapter.
 6. Outbound event and delivery result are persisted in the audit trail.
 
-Never collapse these steps into an automatic send.
+Never collapse these steps into an automatic send **in the approval path**. The one
+capability allowed to send without a human is the separately gated auto-reply mode
+below.
+
+### Auto-reply mode
+
+A distinct capability from the approval path above, for the conversational front
+door only. It answers a customer's inbound LINE message automatically, and is
+governed by these rules:
+
+- It is enabled per customer by an operator switch (`Contact.autoReplyEnabled`),
+  default on, which a sales user or admin may turn off at any time. Off means the
+  official account stays silent and a human replies by hand.
+- It never runs for a contact whose consent status is opted out, and never for a
+  sender who is not a known contact.
+- It answers only the customer's latest inbound message. It must not open a new
+  topic, follow up, or send unprompted outreach — that stays in the approval path.
+- It must commit to nothing: no pricing, discount, quotation, delivery date, legal
+  or contractual term, or capability claim. Handing the question to a human is
+  always an acceptable reply, and the required one whenever a safe answer needs a
+  commitment.
+- It must not disclose internal CRM data (deal value, qualification score, stage,
+  owner, other customers) to the customer.
+- Every automatic send is persisted in the audit trail exactly like an approved
+  one — outbound message record, delivery result, and whether the text came from
+  the model or from the deterministic fallback.
+- It is idempotent per inbound message: a duplicated or redelivered webhook event
+  must never produce a second reply to the customer.
+- When the model is unavailable it falls back to a fixed acknowledgement that
+  promises a human follow-up. It never sends invented content.
+
+The lead-analysis capabilities (summary, qualification, next-best action) remain
+review-only regardless of this switch: they never write to a CRM record without an
+authorized human accepting them.
 
 ---
 

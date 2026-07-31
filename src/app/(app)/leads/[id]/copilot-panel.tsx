@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CopilotSuggestion } from "@/lib/ai/schema";
 import { reviewSuggestion, saveLineDraft } from "../actions";
@@ -11,10 +11,19 @@ export type PendingSuggestion = {
   payload: CopilotSuggestion;
 };
 
+// Lives inside the LINE chat box (see chat-history.tsx). The copilot reads the same
+// conversation the rep is reading and its LINE draft is sent from the same place, so
+// keeping it in a separate column meant working across two halves of the screen.
+//
+// It is collapsed by default because it is an assist, not the conversation: the
+// thread and composer keep the space. It opens on its own whenever there is
+// something to act on — a pending suggestion, or a run the rep just started.
 export function CopilotPanel({ leadId, suggestions }: { leadId: string; suggestions: PendingSuggestion[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(suggestions.length > 0);
+  const bodyId = useId();
   // The copilot always returns something, but when the AI provider is unavailable
   // it degrades to the deterministic fallback (status "service_unavailable"). We
   // surface that so the user can retry the model manually (free tiers rate-limit
@@ -24,6 +33,7 @@ export function CopilotPanel({ leadId, suggestions }: { leadId: string; suggesti
   function generate() {
     setError(null);
     setServiceUnavailable(false);
+    setOpen(true); // the result is the point of the click — don't hide it
     startTransition(async () => {
       const res = await fetch("/api/ai/copilot", {
         method: "POST",
@@ -70,20 +80,45 @@ export function CopilotPanel({ leadId, suggestions }: { leadId: string; suggesti
   }
 
   return (
-    <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-5 dark:border-indigo-900/60 dark:bg-indigo-950/30">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-          AI copilot{suggestions.length > 0 ? ` · ${suggestions.length} pending` : ""}
-        </h2>
+    <section className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/30">
+      {/* Two sibling controls, never nested: the disclosure toggle and Generate. A
+          button inside a <summary> would fire both actions on one tap. */}
+      <div className="flex items-center gap-2">
         <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          className="-m-1 flex min-w-0 flex-1 touch-manipulation items-center gap-1.5 rounded-lg p-1 text-left transition-colors hover:bg-indigo-100/60 dark:hover:bg-indigo-900/30"
+        >
+          <span
+            aria-hidden="true"
+            className={`flex-none text-[10px] text-indigo-500 transition-transform dark:text-indigo-400 ${open ? "rotate-90" : ""}`}
+          >
+            ▶
+          </span>
+          <span className="truncate text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+            AI copilot
+          </span>
+          {suggestions.length > 0 && (
+            <span className="flex-none rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-medium text-white">
+              {suggestions.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
           onClick={generate}
           disabled={pending}
-          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
+          className="flex-none touch-manipulation rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
         >
-          {pending ? "Working…" : "Generate suggestion"}
+          {pending ? "Working…" : "Generate"}
         </button>
       </div>
 
+      {/* Kept mounted so a collapse doesn't discard an in-flight run's error state. */}
+      <div id={bodyId} hidden={!open} className="mt-3">
       {serviceUnavailable && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
           <span>บริการ AI ไม่พร้อมใช้งานชั่วคราว — แสดงผลแบบกำหนดกฎแทน คุณสามารถลองใหม่ได้</span>
@@ -101,7 +136,7 @@ export function CopilotPanel({ leadId, suggestions }: { leadId: string; suggesti
 
       {suggestions.length === 0 ? (
         <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80">
-          No pending suggestions. Generate one to summarise, score, and get a next-best action for this lead.
+          ยังไม่มีคำแนะนำ — กด Generate เพื่อสรุปดีล ให้คะแนน และแนะนำขั้นตอนถัดไปจากบทสนทนานี้
         </p>
       ) : (
         <ul className="flex flex-col gap-4">
@@ -110,7 +145,8 @@ export function CopilotPanel({ leadId, suggestions }: { leadId: string; suggesti
           ))}
         </ul>
       )}
-    </div>
+      </div>
+    </section>
   );
 }
 

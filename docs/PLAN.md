@@ -28,7 +28,7 @@ Live: https://jenosize-ai-crm.vercel.app · demo `admin@jenosize.demo` / `Demo12
 - [x] LINE outbound — approval-based draft (`DRAFT→APPROVED→SENT`), mock + real push adapter
 - [x] LIFF self-registration + `follow`/`unfollow`
 - [x] LIFF account linking (existing Contact ↔ LINE user) via signed link token
-- [x] Greeting auto-reply (per-contact, default off) · chat-history handover view
+- [x] AI auto-reply (per-contact switch, default **on**) · chat-history handover view + in-chat composer
 - [x] LINE rich-menu keyword automation + inquiry→lead capture (§5)
 - [x] Tasks & follow-up reminders (`/tasks` + lead panel)
 - [x] Reporting dashboard (summary cards + filterable trend/value/stage charts)
@@ -73,7 +73,7 @@ LINE user → Contact/Lead · persist the inbound `Message` + `WebhookEvent` ·
 idempotent on `webhookEventId` · reply via the reply API, with the mock adapter in
 tests**. Full behavior spec: [02_FSD §3.5](02_FSD.md).
 
-- [x] **A · "ขอติดต่อทีมงาน" auto-acknowledge** · XS — on this exact inbound keyword, reply a **fixed** acknowledgment ("รับเรื่องแล้ว ทีมงานจะติดต่อกลับโดยเร็ว") via the reply API (best-effort, never turns the 200 into a 500), and log a follow-up signal (`Activity`, or a `Task` on the mapped lead) so sales sees the request. Never AI. **Not** gated by the per-contact greeting toggle — it's a direct customer request.
+- [x] **A · "ขอติดต่อทีมงาน" auto-acknowledge** · XS — on this exact inbound keyword, reply a **fixed** acknowledgment ("รับเรื่องแล้ว ทีมงานจะติดต่อกลับโดยเร็ว") via the reply API (best-effort, never turns the 200 into a 500), and log a follow-up signal (`Activity`, or a `Task` on the mapped lead) so sales sees the request. Never AI. **Not** gated by the per-contact AI auto-reply toggle — it's a direct customer request.
 - [x] **B · "ขอสอบถามข้อมูลเพิ่มเติม" → inquiry → lead** · M — reply asking for details (สินค้า/บริการที่สนใจ · ความต้องการ · งบประมาณ) and set a lightweight `Contact.pendingIntent = AWAITING_INQUIRY`; the customer's **next** message is captured as the inquiry and **creates a Lead** (`source LINE_OA`, `stage NEW`, default owner pending auto-routing) with the inquiry text as the opening `Activity`/`Message`, then clears the intent. Goal: turn a LINE inquiry into a qualifiable lead for sales.
 - [x] **C · Safe mapping / persistence / reply for A & B** · S — ensure both handlers map the LINE user → Contact (create-if-unknown per §3.1), persist the inbound event idempotently, and respond via the reply API **or** an approval-based `Message(DRAFT)` where a human should confirm; unit-test each path with the **mock adapter** (no live LINE). Mostly reuse of the shipped webhook/outbound infra — this case is the guardrail that A & B don't bypass it.
 

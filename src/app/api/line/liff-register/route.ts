@@ -10,7 +10,9 @@ import { logger } from "@/lib/logger";
 // server-side ID-token verification below, not a session. Prisma needs Node runtime.
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+export const POST = liffRegister;
+
+async function liffRegister(req: Request) {
   const channelId = loginChannelId();
   if (!channelId) {
     logger.error("line.liff.misconfigured", { reason: "no LINE_LOGIN_CHANNEL_ID / LINE_LIFF_ID" });

@@ -9,7 +9,9 @@ import { logger } from "@/lib/logger";
 // comparison. A gateway normalizes its provider webhook to the documented shape.
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
+export const POST = inboundEmail;
+
+async function inboundEmail(request: Request) {
   const secret = process.env.EMAIL_WEBHOOK_SECRET?.trim();
   const presented = request.headers.get("x-email-webhook-secret");
   if (!secret || !presented || !secretsMatch(secret, presented)) {

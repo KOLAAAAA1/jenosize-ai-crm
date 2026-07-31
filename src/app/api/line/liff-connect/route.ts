@@ -12,7 +12,9 @@ import { logger } from "@/lib/logger";
 // customer never supplies the userId or the contactId directly. Node for Prisma.
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+export const POST = liffConnect;
+
+async function liffConnect(req: Request) {
   const channelId = loginChannelId();
   if (!channelId) {
     logger.error("line.liff.misconfigured", { reason: "no LINE_LOGIN_CHANNEL_ID / LINE_LIFF_ID" });

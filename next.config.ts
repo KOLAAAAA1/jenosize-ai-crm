@@ -10,6 +10,16 @@ const nextConfig: NextConfig = {
   // Dev-only: `allowedDevOrigins` has no effect on production builds. The `*.`
   // wildcard covers the ephemeral tunnel subdomain, which changes each run.
   allowedDevOrigins: ["*.trycloudflare.com"],
+
+  // `src/lib/ai/skill.ts` reads skills/crm-copilot/SKILL.md from disk at run time to
+  // build the model's system prompt. Next traces imports, not runtime fs reads, so
+  // without this the file is absent from the deployed function bundle and every
+  // prompt silently loses the skill contract (a logged warning, prod only). Keyed by
+  // route glob; `/*` covers both the copilot route and the LINE webhook, which each
+  // call a model.
+  outputFileTracingIncludes: {
+    "/*": ["skills/crm-copilot/SKILL.md"],
+  },
 };
 
 export default nextConfig;
